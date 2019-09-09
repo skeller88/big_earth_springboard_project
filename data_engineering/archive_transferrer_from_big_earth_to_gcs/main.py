@@ -13,6 +13,8 @@ def main():
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
     blob_name: str = os.environ.get("GCS_BLOB_NAME")
 
+    print(f"Uploading BigEarth to bucket {bucket_name} and blob {blob_name}")
+
     with GCSObjectStreamUploader(client=gcs_client, bucket_name=bucket_name, blob_name=blob_name) as gcs_uploader:
         with requests.get(url, stream=True) as response_stream:
             for chunk in response_stream.raw.stream(128*2000, decode_content=False):
@@ -30,4 +32,5 @@ def local_file_test():
 
 
 if __name__ == "__main__":
+    print('running')
     main()

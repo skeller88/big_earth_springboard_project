@@ -12,7 +12,6 @@ test_archive*
 # This file is git-ignored so that secrets aren't committed to version control
 .bash/env_secrets
 *.list
-*.gcs
 
 # ipython
 *.ipynb
