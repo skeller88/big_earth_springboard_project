@@ -4,7 +4,7 @@ from pathlib import Path
 import requests
 from google.cloud import storage
 
-from data_engineering.archive_transferrer_from_big_earth_to_gcs.gcs_stream_uploader import GCSObjectStreamUploader
+from data_engineering.gcs_stream_uploader import GCSObjectStreamUploader
 
 
 def main():
