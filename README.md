@@ -1,4 +1,4 @@
-# Environment
+# Python Environment
 ```bash
 export PROJECT_DIR=<project-dir>
 cd $PROJECT_DIR
@@ -7,6 +7,17 @@ pip install -r requirements.txt
 
 # Jupyter should already be installed
 python -m ipykernel install --user --name=big_earth_springboard_project
+```
+
+# Google Cloud Environment
+```bash 
+export KEY_FILE=[your-key-file]
+gcloud auth activate-service-account --key-file=$KEY_FILE
+gcloud auth configure-docker
+
+export PROJECT_ID=[your-project-id]
+export HOSTNAME=us.gcr.io
+export BASE_IMAGE_NAME=$HOSTNAME/$PROJECT_ID
 ```
 
 # Data preparation

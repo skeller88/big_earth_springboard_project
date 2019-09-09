@@ -1,4 +1,5 @@
 import contextlib
+import time
 from io import BytesIO
 
 from google.auth.transport.requests import AuthorizedSession
@@ -10,8 +11,17 @@ class GCSObjectStreamUploader(contextlib.AbstractContextManager, BytesIO):
     """
     From https://dev.to/sethmichaellarson/python-data-streaming-to-google-cloud-storage-with-resumable-uploads-458h
     """
-    def __init__(self, client: storage.Client, bucket_name: str, blob_name: str, chunk_size: int = 256 * 1024):
+
+    def __init__(self, client: storage.Client, bucket_name: str, blob_name: str, chunk_size: int = 200 * 256 * 1024):
+        """
+        :param client:
+        :param bucket_name:
+        :param blob_name:
+        :param chunk_size: Must be a multiple of google/resumable_media/common.py#UPLOAD_CHUNK_SIZE
+        """
         super().__init__()
+        self.start_time = time.time()
+
         self._client = client
         self._bucket = self._client.bucket(bucket_name)
         self._blob = self._bucket.blob(blob_name)
@@ -25,6 +35,8 @@ class GCSObjectStreamUploader(contextlib.AbstractContextManager, BytesIO):
         # chunk_size (int): The size of the chunk to be read from the ``stream``
         self._chunk_size: int = chunk_size
         self._bytes_read_from_stream: int = 0
+        # checkpoint every 1GB
+        self._bytes_read_from_stream_checkpoint = 1e6
 
         self._transport = AuthorizedSession(credentials=self._client._credentials)
         self._request: requests.ResumableUpload = None
@@ -65,14 +77,23 @@ class GCSObjectStreamUploader(contextlib.AbstractContextManager, BytesIO):
     def read(self, chunk_size: int) -> bytes:
         """
         Used by google.resumable_media._upload.get_next_chunk to slice the next chunk of bytes from the stream.
+
+        memoryview avoids loading a slice into memory.
         :param chunk_size:
         :return:
         """
         bytes_to_read: int = min(chunk_size, self._total_bytes)
-        # memoryview avoids loading a slice into memory
         memview = memoryview(self._stream)
         self._stream = memview[bytes_to_read:].tobytes()
         self._bytes_read_from_stream += bytes_to_read
+
+        # Checkpoint upload progress
+        if self._bytes_read_from_stream > self._bytes_read_from_stream_checkpoint:
+            minutes_elapsed = (time.time() - self.start_time) / 60
+            print(f"Read {self._bytes_read_from_stream / 1e6} MB from stream in " \
+                  f"{minutes_elapsed} minutes. {self._bytes_read_from_stream / 1e6 / minutes_elapsed} MB per minute.")
+            self._bytes_read_from_stream_checkpoint += 1e6
+
         self._total_bytes -= bytes_to_read
         return memview[:bytes_to_read].tobytes()
 

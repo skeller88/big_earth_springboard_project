@@ -1,11 +1,21 @@
+# Unused data
+*.csv
+*.tar.gz
+
 # Test data
 test_zipfile/*
 test_archive*
+
+# Git
+.git/*
 
 # This file is git-ignored so that secrets aren't committed to version control
 .bash/env_secrets
 *.list
 *.gcs
+
+# ipython
+*.ipynb
 
 # Intellij
 atlassian-ide-plugin.xml
@@ -73,7 +83,7 @@ _ajdump/
 
 # Files associated with Python code used in development
 *.pyc
-venv
+venv/*
 
 # Caches for git
 .commit-count-cache
