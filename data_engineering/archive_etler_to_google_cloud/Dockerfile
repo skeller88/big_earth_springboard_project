@@ -3,6 +3,10 @@ FROM base as builder
 
 ARG filedir
 
+#RUN apk --no-cache add bash curl
+#RUN curl -sSO https://dl.google.com/cloudagents/install-monitoring-agent.sh
+#RUN bash install-monitoring-agent.sh
+
 RUN echo "filedir" $filedir
 
 RUN mkdir /install
@@ -21,4 +25,4 @@ WORKDIR /app
 # Allow python to discover modules
 ENV PYTHONPATH "${PYTHONPATH}:/app"
 
-CMD ["python", "/app/data_engineering/metadata_reader/main.py"]
+CMD ["python", "/app/data_engineering/archive_etler_to_google_cloud/main.py"]

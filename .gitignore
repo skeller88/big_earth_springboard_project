@@ -1,6 +1,7 @@
 # Test data
 test_zipfile/*
 test_archive*
+big_earth/*
 
 # This file is git-ignored so that secrets aren't committed to version control
 .bash/env_secrets
