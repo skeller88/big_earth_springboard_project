@@ -3,19 +3,26 @@ import os
 from pathlib import Path
 
 import cv2
-import numpy
+import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
 
 
 def tiff_to_jpg(base_filename, optical_max_value: int):
+    """
+    Based on code in https://github.com/tensorflow/datasets/blob/master/tensorflow_datasets/image/bigearthnet.py
+
+    :param base_filename:
+    :param optical_max_value: what to choose?
+    https://community.hexagongeospatial.com/t5/ERDAS-IMAGINE/Rescale-from-12-bit-to-8-bit/m-p/4360/highlight/true
+    :return:
+    """
     # bands = list(map(lambda band: Image.open(base_filename.format(band)), ["02", "03", "04"]))
     bands = list(map(lambda band: cv2.imread(base_filename.format(band), cv2.IMREAD_UNCHANGED), ["02", "03", "04"]))
-    rgb_img = numpy.stack(bands, axis=-1)
+    rgb_img = np.stack(bands, axis=-1)
     # https://stackoverflow.com/questions/2816144/python-convert-12-bit-image-encoded-in-a-string-to-8-bit-png
     rgb_img = rgb_img / optical_max_value * 255.
-    rgb_img = rgb_img.astype('uint8')
-    rgb_img_num = rgb_img[0][0][0]
+    rgb_img = np.clip(rgb_img, 0, 255).astype(np.uint8)
     # 120x120 pixels for 10m bands
     print(rgb_img.shape)
     print("rgb_img pixel for 3 bands\n", rgb_img[0][0])

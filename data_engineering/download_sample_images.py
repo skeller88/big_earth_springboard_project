@@ -1,4 +1,6 @@
-"S2A_MSIL2A_20170613T101031_34_81"
+"""
+Download some sample images from google cloud storage to a local directory, ~/data.
+"""
 import os
 from pathlib import Path
 
