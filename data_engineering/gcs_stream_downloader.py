@@ -6,7 +6,6 @@ from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import storage
 
-
 class GCSObjectStreamDownloader(contextlib.AbstractContextManager, BytesIO):
     """
     From https://dev.to/sethmichaellarson/python-data-streaming-to-google-cloud-storage-with-resumable-uploads-458h

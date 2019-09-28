@@ -1,5 +1,7 @@
+import google
 import logging
 import os
+import sys
 import tarfile
 import time
 from concurrent.futures import Future, as_completed
@@ -7,6 +9,8 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from queue import Queue, Empty
 from typing import List
 
+from google.api_core import exceptions, retry
+from google.api_core.retry import Retry
 from google.cloud import storage
 
 from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
@@ -15,11 +19,12 @@ from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
 def main():
     gcs_client = storage.Client()
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
-    metadata_blob_name: str = os.environ.get("GCS_METADATA_BLOB_NAME")
     tarfile_blob_name: str = os.environ.get("GCS_TARFILE_BLOB_NAME")
     uncompressed_blob_prefix: str = os.environ.get("UNCOMPRESSED_BLOB_PREFIX")
     disk_path: str = os.environ.get("DISK_PATH")
-    logger = logging.Logger("archive_etler_to_google_cloud")
+    logger = logging.Logger("archive_etler_to_google_cloud", level=logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    logger.addHandler(handler)
 
     tarfile_disk_path: str = disk_path + "/" + tarfile_blob_name
 
@@ -69,14 +74,11 @@ def main():
         "checkpoint": 1000
     }
 
-    def upload_with_retry(blob, content_type, filepath, retry_num):
-        try:
-            blob.upload_from_filename(filepath, content_type=content_type)
-        except Exception as ex:
-            logger.error(f"Exception when uploading to google cloud. Retry number {retry_num}")
-            logger.exception(ex)
-            if retry_num < 3:
-                upload_with_retry(blob, content_type, filepath, retry_num + 1)
+    google_retry = Retry(deadline=480, maximum=240)
+
+    def on_google_retry_error(ex: Exception):
+        logger.error("Exception when uploading blob to google cloud.")
+        logger.exception(ex)
 
     def google_cloud_uploader():
         start = time.time()
@@ -84,7 +86,14 @@ def main():
         blob_name, filepath, content_type = filepaths_to_upload.get(timeout=30)
         while True:
             blob = bucket.blob(blob_name)
-            upload_with_retry(blob, content_type, filepath, 0)
+            try:
+                google_retry(blob.upload_from_filename(filepath, content_type=content_type),
+                             on_error=on_google_retry_error)
+            except Exception as ex:
+                logger.error(f"Uncaught exception when uploading blob to google cloud.")
+                logger.exception(ex)
+                filepaths_to_upload.put((blob.name, filepath, content_type))
+                raise ex
             stats['num_files_uploaded'] += 1
 
             if stats['num_files_uploaded'] > stats['checkpoint']:
@@ -100,8 +109,15 @@ def main():
                 for filename in os.listdir(subdir_path):
                     if not filename.startswith("._"):
                         file_suffix = filename.rsplit(".")[-1]
-                        content_type = "image/tiff" if file_suffix == ".tif" else "application/json"
-                        blob_name: str = os.path.join(uncompressed_blob_prefix, subdir_name, filename)
+                        if file_suffix == "tif":
+                            content_type = "image/tiff"
+                            # multiple tiff files per subdirectory
+                            blob_name: str = os.path.join(uncompressed_blob_prefix, "tiff", subdir_name, filename)
+                        else:
+                            content_type = "application/json"
+                            # only one json file per subdirectory
+                            blob_name: str = os.path.join(uncompressed_blob_prefix, "json", filename)
+
                         filepath = subdir_path + "/" + filename
                         filepaths_to_upload.put((blob_name, filepath, content_type))
 
@@ -109,9 +125,9 @@ def main():
     with ThreadPoolExecutor(max_workers=num_workers + 1) as executor:
         tasks: List[Future] = []
         for x in range(num_workers):
-            logger.info(f"Starting worker {x}")
             tasks.append(executor.submit(google_cloud_uploader))
         tasks.append(executor.submit(traverse_directory))
+        logger.info(f"Started {len(tasks)} worker tasks.")
 
         logger.info("Starting traverse_directory")
         for task in as_completed(tasks):

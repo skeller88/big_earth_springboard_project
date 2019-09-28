@@ -32,7 +32,7 @@ docker pull jupyter/pyspark-notebook
 # https://github.com/jupyter/docker-stacks/issues/542
 mkdir ~/jupyter_notebook_files
 
-docker run -it --rm -p 8888:8888 --volume ~/jupyter_notebook_files:/home/jovyan/work jupyter/pyspark-notebook
+docker run -it --rm -p 8889:8889 --volume ~/jupyter_notebook_files:/home/jovyan/work jupyter/pyspark-notebook
 ```
 
 ```python3
@@ -40,6 +40,7 @@ docker run -it --rm -p 8888:8888 --volume ~/jupyter_notebook_files:/home/jovyan/
 import pyspark
 from pyspark.sql import *
 
+# Based on `core-site.xml` in https://github.com/GoogleCloudPlatform/bigdata-interop/blob/master/gcs/INSTALL.md doc
 spark = SparkSession.builder \
     .master("local") \
     .appName("big_earth") \
@@ -60,7 +61,11 @@ cp -R ~/.gcs ~/jupyter_notebook_files
 wget https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop2-latest.jar -P ~/jupyter_notebook_files
 ```
 
-
+# Submit Dataproc job
+```bash
+gcloud dataproc jobs submit pyspark big_earth_springboard_project/data_engineering/metadata_aggregator.py \
+--cluster=spark-cluster --region=us-west1
+```
 
 # Data preparation
 Download BigEarth data
