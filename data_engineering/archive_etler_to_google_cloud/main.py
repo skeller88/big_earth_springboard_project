@@ -1,4 +1,3 @@
-import google
 import logging
 import os
 import sys
@@ -9,7 +8,6 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from queue import Queue, Empty
 from typing import List
 
-from google.api_core import exceptions, retry
 from google.api_core.retry import Retry
 from google.cloud import storage
 

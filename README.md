@@ -63,8 +63,7 @@ wget https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop2-latest.
 
 # Submit Dataproc job
 ```bash
-gcloud dataproc jobs submit pyspark big_earth_springboard_project/data_engineering/metadata_aggregator.py \
---cluster=spark-cluster --region=us-west1
+gcloud dataproc jobs submit pyspark big_earth_springboard_project/data_engineering/metadata_aggregator.py --cluster=spark-cluster --region=us-west1
 ```
 
 # Data preparation
@@ -80,3 +79,17 @@ python $PROJECT_DIR/eliminate_snowy_cloudy_patches.py -r ~/Documents/BigEarthNet
 patches_with_cloud_and_shadow.csv patches_with_seasonal_snow.csv -d DIR_WITHOUT_CLOUDS_AND_SNOW
 ```
 
+# Set up Google Cloud notebook
+Create instance
+
+Ssh to instance and mount disk
+```bash
+# confirm the disk is attached to the instance
+lsblk
+sudo mkdir -p /mnt/ssd-persistent-disk-200gb
+sudo mount /dev/sdb /mnt/ssd-persistent-disk-200gb
+
+# If there are permissions issues with accessing the mounted disk, just give everyone all permissions
+chmod 777 .
+
+```

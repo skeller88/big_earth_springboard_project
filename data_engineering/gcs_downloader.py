@@ -20,5 +20,3 @@ bucket_name: str = "big_earth"
 blob_name: str = "raw/S2A_MSIL2A_20170717T113321_10_80/S2A_MSIL2A_20170717T113321_10_80_B01.tif"
 
 main(bucket_name, blob_name)
-
-cv2.cvtColor(cv2.imread('img.jpg'), cv2.COLOR_BGR2RGB)
