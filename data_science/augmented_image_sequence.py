@@ -68,9 +68,6 @@ class AugmentedImageSequence(Sequence):
         if self.y is not None:
             self.y = self.y[shuffled_index]
 
-
-
-
     def on_epoch_end(self):
         # https://stackoverflow.com/questions/29576430/shuffle-dataframe-rows
         shuffled_index = self.base_index.copy()

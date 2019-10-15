@@ -106,18 +106,14 @@ def main():
             if os.path.isdir(subdir_path):
                 for filename in os.listdir(subdir_path):
                     if not filename.startswith("._"):
-                        file_suffix = filename.rsplit(".")[-1]
-                        if file_suffix == "tif":
+                        split = filename.rsplit(".")
+                        if split[-1] == "tif" and split[-2].endswith(("B02", "B03", "B04")):
                             content_type = "image/tiff"
                             # multiple tiff files per subdirectory
                             blob_name: str = os.path.join(uncompressed_blob_prefix, "tiff", subdir_name, filename)
-                        else:
-                            content_type = "application/json"
-                            # only one json file per subdirectory
-                            blob_name: str = os.path.join(uncompressed_blob_prefix, "json", filename)
 
-                        filepath = subdir_path + "/" + filename
-                        filepaths_to_upload.put((blob_name, filepath, content_type))
+                            filepath = subdir_path + "/" + filename
+                            filepaths_to_upload.put((blob_name, filepath, content_type))
 
     num_workers = int(os.environ.get("NUM_WORKERS", 3))
     with ThreadPoolExecutor(max_workers=num_workers + 1) as executor:

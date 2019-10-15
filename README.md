@@ -92,4 +92,6 @@ sudo mount /dev/sdb /mnt/ssd-persistent-disk-200gb
 # If there are permissions issues with accessing the mounted disk, just give everyone all permissions
 chmod 777 .
 
+# Back up notebooks
+cp /home/jupyter/*.ipynb /mnt/ssd-persistent-disk-200gb/jupyter
 ```
