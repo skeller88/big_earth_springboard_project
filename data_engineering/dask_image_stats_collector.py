@@ -1,69 +1,109 @@
-# %alias_magic t timeit
-import cv2
-import glob
-import json
-import os
-from hashlib import sha256
-
-import dask
+import time
 import dask.array as da
-import dask.bag as db
-import dask.dataframe as dd
-
+import gcsfs
+import imageio
 import numpy as np
-import pandas as pd
-from sklearn.preprocessing import MultiLabelBinarizer
+from distributed import Client
+from google.cloud import storage
 
-disk_dir = '/mnt/ssd-persistent-disk-200gb'
-big_earth_dir = disk_dir + '/BigEarthNet-v1.0'
-glob_path = big_earth_dir + '/**/*B0{}.tif'
-# glob_path = big_earth_dir + '/S2B_MSIL2A_20180421T114349_42_65/*B0{}.tif'
-os.listdir(disk_dir)
+client = Client()
 
-# %%t -n1 -r1
-def imread_and_apply(filename, func):
-    flattened = cv2.imread(filename, cv2.IMREAD_UNCHANGED).flatten()
-    return func(flattened)
 
-def apply_func_to_all_patches(per_image_func, da_gufunc):
-    delayed_func = dask.delayed(per_image_func, pure=True)  # Lazy zversion of imread
-    band_arrs = []
-    for band_name, band_num in {"red": "2", "green": "3", "blue": "4"}.items():
-        filenames = glob.glob(glob_path.format(band_num))
-        lazy_images = [delayed_func(path) for path in filenames]   # Lazily evaluate imread on each path
-        sample = lazy_images[0].compute()  # load the first image (assume rest are same shape/dtype)
+def read_filenames_from_gcs(filenames):
+    bands = ["B02", "B03", "B04"]
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket("big_earth")
 
-        arrays = [da.from_delayed(lazy_image,           # Construct a small Dask array
-                                  dtype=sample.dtype,   # for every lazy value
-                                  shape=sample.shape)
-                  for lazy_image in lazy_images]
+    def read(filename):
+        imgs = []
+        for band in bands:
+            image_path = f"{filename}{filename.split('/')[-2]}_{band}.tif"
+            image_path = image_path.replace("big_earth/", "")
+            blob = bucket.blob(image_path)
+            r = blob.download_as_string()
+            imgs.append(imageio.core.asarray(imageio.imread(r, 'TIFF')))
+        return np.stack(imgs, axis=-1)
 
-        stack = da.stack(arrays, axis=0)                # Stack all small Dask arrays into one
-        band_arrs.append(stack)
-    bands = da.concatenate(band_arrs, axis=0)
-    # https://docs.dask.org/en/latest/array-api.html#dask.array.gufunc.as_gufunc
-    if da_gufunc is not None:
-        return da.apply_gufunc(da_gufunc, "(i)->()", bands).compute()
-    return bands.compute()
+    lazy_images = da.from_array([read(filename) for filename in filenames],
+                                chunks=(len(filenames), 120, 120, len(bands)))
+    return lazy_images
 
-pixel_sum = apply_func_to_all_patches(lambda filename: imread_and_apply(filename, np.sum), np.sum)
-print(pixel_sum)
+fs = gcsfs.GCSFileSystem(project='big_earth')
+filenames = fs.ls("big_earth/raw_rgb/tiff")
 
-def imread_and_validate_shape(filename):
-    img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-    assert 1 == (120, 120), f"filename shape was {img.shape}"
-    return np.asarray(img.shape)
+st = time.time()
 
-imread_and_validate_shape_delayed = dask.delayed(imread_and_validate_shape, pure=True)
-bands = apply_func_to_all_patches(imread_and_validate_shape_delayed)
+chunk_size = 50
+chunk_num = 0
+chunk_futures = []
+start = 0
+end = start + chunk_size
+image_paths_to_submit = filenames
+is_last_chunk = False
 
-pixel_count = 120 * 120 * 3 * bands.shape[0]
+for dataset in client.list_datasets():
+    client.unpublish_dataset(dataset)
 
-mean = pixel_sum / pixel_count
+while True:
+    cst = time.time()
+    chunk = image_paths_to_submit[start:end]
+    cst1 = time.time()
 
-def sum_mean_squared_diff(arr):
-    squared_diffs = np.vectorize(lambda a, b: (a - b)**2)
-    return np.sum(squared_diffs(arr, mean))
+    if start == 0:
+        print('loaded chunk in', cst1 - cst)
 
-imread_and_get_mean_squared_diff = dask.delayed(lambda filename: imread_and_apply(filename, sum_mean_squared_diff), pure=True)
-band_arrs = apply_func_to_all_patches(imread_and_get_mean_squared_diff, np.sum)
+    if len(chunk) == 0:
+        break
+
+    chunk_future = client.submit(read_filenames_from_gcs, chunk)
+    chunk_futures.append(chunk_future)
+    dataset_name = "chunk_{}".format(chunk_num)
+    client.publish_dataset(**{dataset_name: chunk_future})
+
+    if start == 0:
+        print('submitted chunk in', time.time() - cst1)
+    start = end
+
+    if is_last_chunk:
+        break
+
+    chunk_num += 1
+    end = start + chunk_size
+    if end > len(image_paths_to_submit):
+        is_last_chunk = True
+        end = len(image_paths_to_submit)
+
+    if start == end:
+        break
+
+print('completed in', time.time() - st)
+
+persisted_chunks = []
+start = time.time()
+for idx, chunk in enumerate(chunk_futures):
+    startc = time.time()
+    persisted_chunk = client.persist(chunk.result())
+    persisted_chunks.append(persisted_chunk)
+    dataset_name = 'persisted_chunk_{}'.format(idx)
+    client.publish_dataset(**{dataset_name: persisted_chunk})
+    if idx == 0:
+        print('submitted chunk in', time.time() - startc)
+
+print('submitted all chunk_futures in', time.time() - start)
+
+da.concatenate()
+
+
+############## old code - not used right now
+persisted_chunks = []
+start = time.time()
+for idx, chunk in enumerate(chunk_futures):
+    if idx == 0:
+        startc = time.time()
+        persisted_chunks.append(client.persist(chunk.result()))
+        print('submitted chunk in', time.time() - startc)
+    else:
+        persisted_chunks.append(client.persist(chunk.result()))
+
+print('submitted all chunk_futures in', time.time() - start)
+

@@ -5,6 +5,8 @@ cd $PROJECT_DIR
 python3 -m venv venv
 pip install -r requirements.txt
 
+# python3 -m pip install --user --upgrade pip
+
 # Jupyter should already be installed
 python -m ipykernel install --user --name=big_earth_springboard_project
 ```
@@ -94,4 +96,44 @@ chmod 777 .
 
 # Back up notebooks
 cp /home/jupyter/*.ipynb /mnt/ssd-persistent-disk-200gb/jupyter
+```
+
+# Set up Kubernetes cluster
+https://zero-to-jupyterhub.readthedocs.io/en/latest/google/step-zero-gcp.html
+
+```bash
+export GOOGLE-EMAIL-ACCOUNT=<your-google-cloud-account-email>
+
+gcloud components install kubectl -y
+
+# https://cloud.google.com/compute/docs/machine-types
+# 7.5GB memory, 2 vCPUs
+gcloud container clusters create \
+  --machine-type n1-standard-4 \
+  --num-nodes 1 \
+  --zone us-west1-b \
+  --cluster-version latest \
+  dask
+
+kubectl create clusterrolebinding cluster-admin-binding \
+  --clusterrole=cluster-admin \
+  --user=skeller88@gmail.com
+
+gcloud container clusters get-credentials dask --zone us-west1-b --project big-earth-252219
+
+```
+
+set up helm: https://zero-to-jupyterhub.readthedocs.io/en/latest/setup-helm.html
+
+```bash
+kubectl --namespace kube-system create serviceaccount tiller
+kubectl create clusterrolebinding tiller --clusterrole cluster-admin --serviceaccount=kube-system:tiller
+helm init --service-account tiller --wait
+kubectl patch deployment tiller-deploy --namespace=kube-system --type=json --patch='[{"op": "add", "path": "/spec/template/spec/containers/0/command", "value": ["/tiller", "--listen=localhost:44134"]}]'
+
+helm repo update
+helm install -f helm_dask_chart.yaml stable/dask
+
+gcloud container clusters get-credentials dask --zone us-west1-b --project big-earth-252219 \
+ && kubectl port-forward $(kubectl get pod --selector="app=dask,component=jupyter,release=mollified-gerbil" --output jsonpath='{.items[0].metadata.name}') 8080:8888
 ```

@@ -52,18 +52,7 @@ def main():
 
     bucket = gcs_client.bucket(bucket_name)
 
-    # with open(metadata_file, "w") as metadata_fileobj:
-    # writer = csv.DictWriter(metadata_fileobj,
-    #                         fieldnames=["image_prefix", "labels", "coordinates", "projection", "tile_source",
-    #                                     "acquisition_date"])
-    # if filename.endswith('.json'):
-    #     with open(filepath) as fileobj:
-    #         json_obj = json.loads(fileobj.read())
-    #         json_obj["image_prefix"] = subdir_name
-    #         writer.writerow(json_obj)
-
     # Don't use walk because filenames will have thousands of files. Iterate one by one instead
-
     filepaths_to_upload = Queue()
 
     stats = {

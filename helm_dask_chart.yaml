@@ -1,0 +1,92 @@
+---
+# nameOverride: dask
+# fullnameOverride: dask
+
+scheduler:
+  name: scheduler
+  image:
+    repository: "daskdev/dask"
+    tag: 1.1.5
+    pullPolicy: IfNotPresent
+    # See https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    pullSecrets:
+  replicas: 1
+  serviceType: "LoadBalancer"
+  servicePort: 8786
+  resources: {}
+#    limits:
+  #    cpu: 1.8
+  #    memory: 6G
+  #  requests:
+  #    cpu: 1.8
+  #    memory: 6G
+  tolerations: []
+  nodeSelector:
+    cloud.google.com/gke-nodepool: default-pool
+  affinity: {}
+  env:
+    - name: EXTRA_PIP_PACKAGES
+      value: gcsfs imageio
+
+webUI:
+  name: webui
+  servicePort: 80
+  ingress:
+    enabled: false
+    tls: false
+    hostname: dask-ui.example.com
+    annotations:
+
+worker:
+  name: worker
+  image:
+    repository: "daskdev/dask"
+    tag: 1.1.5
+    pullPolicy: IfNotPresent
+    dask_worker: "dask-worker"
+    pullSecrets:
+  replicas: 1
+  aptPackages: >-
+  env:
+    - name: EXTRA_PIP_PACKAGES
+      value: gcsfs google-cloud-storage imageio
+  nthreads: 40
+  resources:
+    limits:
+      cpu: 1
+      memory: 3.5G
+  tolerations: []
+  nodeSelector:
+    cloud.google.com/gke-nodepool: worker-pool
+  affinity: {}
+
+jupyter:
+  name: jupyter
+  enabled: true
+  image:
+    repository: "daskdev/dask-notebook"
+    tag: 1.1.5
+    pullPolicy: IfNotPresent
+    pullSecrets:
+    #  - name: regcred
+  replicas: 1
+  serviceType: "LoadBalancer"
+  servicePort: 80
+  # This hash corresponds to the password 'dask'
+  password: 'sha1:aae8550c0a44:9507d45e087d5ee481a5ce9f4f16f37a0867318c'
+  env:
+    - name: EXTRA_PIP_PACKAGES
+      value: gcsfs google-cloud-storage imageio
+  resources:
+    limits:
+      cpu: 1
+      memory: 4G
+  tolerations: []
+  nodeSelector:
+    cloud.google.com/gke-nodepool: default-pool
+  affinity: {}
+  ingress:
+    enabled: false
+    tls: false
+    hostname: dask-jupyter.example.com
+    annotations:
