@@ -1,0 +1,38 @@
+# From https://towardsdatascience.com/a-journey-into-big-data-with-apache-spark-part-1-5dfcc2bccdd2
+version: "3.3"
+services:
+  spark-master:
+    image: $BASE_IMAGE_NAME/spark:latest
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    networks:
+      - spark-network
+    volumes:
+      - /Users/shanekeller/Documents/big_earth_springboard_project:/app
+    environment:
+      - "SPARK_LOCAL_IP=spark-master"
+      - "SPARK_MASTER_PORT=7077"
+      - "SPARK_MASTER_WEBUI_PORT=8080"
+    command: "/app/infrastructure/spark/start-master.sh"
+  spark-worker:
+    image: $BASE_IMAGE_NAME/spark:latest
+    depends_on:
+      - spark-master
+    ports:
+      - 8080
+    networks:
+      - spark-network
+    volumes:
+      - /Users/shanekeller/Documents/big_earth_springboard_project:/app
+    environment:
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - "SPARK_WORKER_WEBUI_PORT=8080"
+    command: "/app/infrastructure/spark/start-worker.sh"
+networks:
+  spark-network:
+    driver: bridge
+    ipam:
+      driver: default

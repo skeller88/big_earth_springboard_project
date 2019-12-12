@@ -45,7 +45,7 @@ worker:
     pullPolicy: IfNotPresent
     dask_worker: "dask-worker"
     pullSecrets:
-  replicas: 1
+  replicas: 7
   aptPackages: >-
   env:
     - name: EXTRA_PIP_PACKAGES
@@ -54,7 +54,7 @@ worker:
   resources:
     limits:
       cpu: 1
-      memory: 3.5G
+      memory: 5.25G
   tolerations: []
   nodeSelector:
     cloud.google.com/gke-nodepool: worker-pool
@@ -79,8 +79,8 @@ jupyter:
       value: gcsfs google-cloud-storage imageio
   resources:
     limits:
-      cpu: 1
-      memory: 4G
+      cpu: 2
+      memory: 10G
   tolerations: []
   nodeSelector:
     cloud.google.com/gke-nodepool: default-pool

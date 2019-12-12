@@ -1,3 +1,12 @@
 ipykernel
-pandas
 rasterio
+six==1.11.0
+pandas==0.23.4
+h5py==2.8.0
+pillow==4.1.1
+cloudpickle==0.8.0
+tensorflow==1.13.1
+keras==2.2.4
+paramiko==2.4.2
+wrapt==1.10.11
+horovod==0.16.4

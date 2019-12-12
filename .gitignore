@@ -32,6 +32,9 @@ ehthumbs.db
 Thumbs.db
 *.pyc
 
+# Spark build files
+spark_submit.egg-info/
+dist
 # Build files
 .gradle
 build/

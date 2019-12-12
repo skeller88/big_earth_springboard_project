@@ -5,6 +5,9 @@ cd $PROJECT_DIR
 python3 -m venv venv
 pip install -r requirements.txt
 
+# For use in building python dependencies to submit to spark
+pip install -U --pre pybuilder
+
 # python3 -m pip install --user --upgrade pip
 
 # Jupyter should already be installed
@@ -63,9 +66,56 @@ cp -R ~/.gcs ~/jupyter_notebook_files
 wget https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop2-latest.jar -P ~/jupyter_notebook_files
 ```
 
+# Spark
+
+## Create local Spark cluster
+
+```
+export BASE_IMAGE_NAME=skeller88
+infrastructure/scripts/docker/build_run_deploy_docker_image.sh spark infrastructure/spark/ False True
+```
+
+Start the spark cluster
+
+`docker-compose -f infrastructure/spark/docker-compose.yml up`
+
+Build dependencies
+
+```
+pip install -r ./requirements.txt -t ./pip_modules && jar -cvf pip_modules.jar -C ./pip_modules .
+jar -cvf src.jar -C . .
+```
+
+Submit the job
+
+```bash
+/spark/bin/spark-submit \
+--master spark://spark-master:7077 \
+--packages 'databricks:spark-deep-learning:1.5.0-spark2.4-s_2.11' \
+--py-files spark_dist/spark_submit-0.1-deps.zip,spark_dist/spark_submit-0.1.zip \
+spark_driver.py data_engineering.spark_metadata_aggregator.py
+```
+
+## Gcloud Spark cluster
+
+
+```bash
+gcloud dataproc clusters create spark-cluster \
+--initialization-actions \
+gs://dataproc-initialization-actions/python/conda-install.sh,gs://dataproc-initialization-actions/python/pip-install.sh \
+--metadata 'CONDA_PACKAGES=six=1.11.0 h5py=2.8.0 pillow=4.1.1 nomkl cloudpickle=0.8.0 tensorflow=1.13.1 keras=2.2.4 paramiko=2.4.2 wrapt=1.10.11' \
+--metadata 'PIP_PACKAGES=horovod==0.16.4'
+--num-masters=1 \
+--num-workers=2 \
+--num-preemptible-workers=2 \
+--optional-components=ANACONDA \
+--properties='spark:spark.jars.packages=databricks:spark-deep-learning:1.5.0-spark2.4-s_2.11' \
+--region=us-west1
+```
+
 # Submit Dataproc job
 ```bash
-gcloud dataproc jobs submit pyspark big_earth_springboard_project/data_engineering/metadata_aggregator.py --cluster=spark-cluster --region=us-west1
+gcloud dataproc jobs submit pyspark data_engineering/spark_metadata_aggregator.py --cluster=spark-cluster --region=us-west1
 ```
 
 # Data preparation
@@ -115,6 +165,14 @@ gcloud container clusters create \
   --cluster-version latest \
   dask
 
+gcloud container node-pools create worker-pool \
+    --machine-type n1-standard-2 \
+    --num-nodes 7 \
+    --preemptible \
+    --zone us-west1-b \
+    --cluster dask
+
+
 kubectl create clusterrolebinding cluster-admin-binding \
   --clusterrole=cluster-admin \
   --user=skeller88@gmail.com
@@ -134,6 +192,14 @@ kubectl patch deployment tiller-deploy --namespace=kube-system --type=json --pat
 helm repo update
 helm install -f helm_dask_chart.yaml stable/dask
 
+# custom repo
+helm install -f helm_dask_chart.yaml /Users/shanekeller/Documents/charts/stable/dask
+
 gcloud container clusters get-credentials dask --zone us-west1-b --project big-earth-252219 \
  && kubectl port-forward $(kubectl get pod --selector="app=dask,component=jupyter,release=mollified-gerbil" --output jsonpath='{.items[0].metadata.name}') 8080:8888
+```
+
+To resize
+```
+ gcloud container clusters resize dask --node-pool worker-pool --num-nodes 5
 ```

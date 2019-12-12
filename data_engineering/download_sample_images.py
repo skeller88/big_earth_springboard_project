@@ -33,6 +33,7 @@ print(obj)
 
 !pip install pympler
 
+import dask
 import dask.array as da
 from distributed import Client
 import numpy as np
@@ -40,10 +41,20 @@ import sys
 
 client = Client()
 
-def get_array(num_arrs):
-    return da.from_array([np.random.randint(2000, size=(100, 100)) for num in range(num_arrs)], chunks=(num_arrs, 100, 100))
 
-arr = get_array(1000)
+def get_imgs(num_imgs):
+    def get():
+        arr = np.random.randint(2000, size=(3, 120, 120)).flatten()
+        return arr
+
+    delayed_get = dask.delayed(get)
+
+    return [da.from_delayed(delayed_get(), shape=(3 * 120 * 120,), dtype=np.uint16) for num in range(num_imgs)]
+
+# https://docs.dask.org/en/latest/delayed-best-practices.html
+
+imgs = get_imgs(1500000)
+
 print(sys.getsizeof(arr))
 print(sys.getsizeof(arr.compute()))
 

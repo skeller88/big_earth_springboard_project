@@ -1,39 +1,44 @@
 import time
+import dask
 import dask.array as da
 import gcsfs
 import imageio
 import numpy as np
 from distributed import Client
-from google.cloud import storage
 
 client = Client()
 
 
 def read_filenames_from_gcs(filenames):
     bands = ["B02", "B03", "B04"]
-    gcs_client = storage.Client()
-    bucket = gcs_client.bucket("big_earth")
+    fs = gcsfs.GCSFileSystem(project='big_earth')
+#     gcs_client = storage.Client()
+#     bucket = gcs_client.bucket("big_earth")
 
     def read(filename):
         imgs = []
         for band in bands:
             image_path = f"{filename}{filename.split('/')[-2]}_{band}.tif"
-            image_path = image_path.replace("big_earth/", "")
-            blob = bucket.blob(image_path)
-            r = blob.download_as_string()
+#             image_path = image_path.replace("big_earth/", "")
+#             blob = bucket.blob(image_path)
+#             r = blob.download_as_string()
+            r = fs.cat(image_path)
             imgs.append(imageio.core.asarray(imageio.imread(r, 'TIFF')))
-        return np.stack(imgs, axis=-1)
+        return np.stack(imgs, axis=-1).flatten()
 
-    lazy_images = da.from_array([read(filename) for filename in filenames],
-                                chunks=(len(filenames), 120, 120, len(bands)))
-    return lazy_images
+    delayed_read = dask.delayed(read)
+    return [da.from_delayed(delayed_read(filename), shape=(14400 * 3, ), dtype=np.uint16) for filename in filenames]
 
 fs = gcsfs.GCSFileSystem(project='big_earth')
 filenames = fs.ls("big_earth/raw_rgb/tiff")
 
+imgs = read_filenames_from_gcs(filenames)
+imgs = da.stack(imgs, axis=0)
+imgs_rechunked = imgs.rechunk((50, 43200))
+
 st = time.time()
 
-chunk_size = 50
+chunk_size = 40000
 chunk_num = 0
 chunk_futures = []
 start = 0
@@ -75,6 +80,9 @@ while True:
 
     if start == end:
         break
+
+    if chunk_num % 3 == 0:
+        print('chunk_num', chunk_num, 'start', start)
 
 print('completed in', time.time() - st)
 
