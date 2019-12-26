@@ -97,14 +97,19 @@ spark_driver.py data_engineering.spark_metadata_aggregator.py
 ```
 
 ## Gcloud Spark cluster
+Copy initialization scripts
+```bash
+gsutil cp gs://dataproc-initialization-actions/conda/bootstrap-conda.sh gs://sk_spark_ops
+gsutil cp gs://dataproc-initialization-actions/conda/install-conda-env.sh gs://sk_spark_ops
+gsutil cp /Users/shanekeller/Documents/big_earth_springboard_project/infrastructure/spark_dependencies/conda_environment.yml gs://sk_spark_ops
+gsutil cp /Users/shanekeller/Documents/big_earth_springboard_project/infrastructure/spark_dependencies/create_spark_cluster.sh gs://sk_spark_ops
+```
 
 
 ```bash
 gcloud dataproc clusters create spark-cluster \
 --initialization-actions \
-gs://dataproc-initialization-actions/python/conda-install.sh,gs://dataproc-initialization-actions/python/pip-install.sh \
---metadata 'CONDA_PACKAGES=six=1.11.0 h5py=2.8.0 pillow=4.1.1 nomkl cloudpickle=0.8.0 tensorflow=1.13.1 keras=2.2.4 paramiko=2.4.2 wrapt=1.10.11' \
---metadata 'PIP_PACKAGES=horovod==0.16.4'
+gs://sk_spark_ops/create_spark_cluster.sh \
 --num-masters=1 \
 --num-workers=2 \
 --num-preemptible-workers=2 \
