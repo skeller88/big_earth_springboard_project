@@ -1,6 +1,5 @@
 from pyspark.sql import *
 from pyspark.sql.functions import *
-import sparkdl
 
 spark = SparkSession.builder \
     .appName("big_earth") \

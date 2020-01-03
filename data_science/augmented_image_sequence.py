@@ -13,13 +13,10 @@ import time
 
 AUGMENTATIONS_TRAIN = Compose([
     Flip(p=0.5),
-    Rotate(limit=(0, 360), p=0.5),
-    Resize(width=256, height=256)
+    Rotate(limit=(0, 360), p=0.5)
 ])
 
-AUGMENTATIONS_TEST = Compose([
-    Resize(width=256, height=256)
-])
+AUGMENTATIONS_TEST = Compose([])
 
 
 class AugmentedImageSequence(Sequence):

@@ -2,15 +2,12 @@ FROM jupyter/tensorflow-notebook
 
 # Install Stackdriver monitoring agent and logging agent:
 # https://app.google.stackdriver.com/settings/accounts/agent?project=big-earth-252219
-RUN curl -sSO https://dl.google.com/cloudagents/install-monitoring-agent.sh
-RUN sudo bash install-monitoring-agent.sh
+# RUN sudo apt-get install stackdriver-agent
 
-RUN curl -sSO https://dl.google.com/cloudagents/install-logging-agent.sh
-RUN sudo bash install-logging-agent.sh
+COPY ./data_science/jupyter_notebook/requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
 
-RUN pip install -r data_science/jupyter_notebook/requirements.txt
-
-COPY ./ /app
+COPY ./data_science /app
 
 WORKDIR /app
 

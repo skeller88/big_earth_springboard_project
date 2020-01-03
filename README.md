@@ -27,7 +27,9 @@ export HOSTNAME=us.gcr.io
 export BASE_IMAGE_NAME=$HOSTNAME/$PROJECT_ID
 ```
 
-# Local Spark Environment
+# Spark
+
+## Run local standalone spark notebook
 ```bash
 docker pull jupyter/pyspark-notebook
 
@@ -65,8 +67,6 @@ cp -R ~/.gcs ~/jupyter_notebook_files
 # https://cloud.google.com/dataproc/docs/concepts/connectors/cloud-storage
 wget https://storage.googleapis.com/hadoop-lib/gcs/gcs-connector-hadoop2-latest.jar -P ~/jupyter_notebook_files
 ```
-
-# Spark
 
 ## Create local Spark cluster
 
@@ -114,11 +114,10 @@ gs://sk_spark_ops/create_spark_cluster.sh \
 --num-workers=2 \
 --num-preemptible-workers=2 \
 --optional-components=ANACONDA \
---properties='spark:spark.jars.packages=databricks:spark-deep-learning:1.5.0-spark2.4-s_2.11' \
 --region=us-west1
 ```
 
-# Submit Dataproc job
+## Submit Dataproc job
 ```bash
 gcloud dataproc jobs submit pyspark data_engineering/spark_metadata_aggregator.py --cluster=spark-cluster --region=us-west1
 ```
@@ -136,8 +135,51 @@ python $PROJECT_DIR/eliminate_snowy_cloudy_patches.py -r ~/Documents/BigEarthNet
 patches_with_cloud_and_shadow.csv patches_with_seasonal_snow.csv -d DIR_WITHOUT_CLOUDS_AND_SNOW
 ```
 
-# Set up Google Cloud notebook
-Create instance
+# Model training
+
+## Add data to local disk
+mkdir ~/jupyter_notebook_files/metadata
+mkdir ~/jupyter_notebook_files/raw_rgb
+mkdir ~/jupyter_notebook_files/raw_rgb/tiff
+gsutil cp -R gs://big_earth/raw_rgb/tiff/S2A_MSIL2A_20170613T101031_0_45 ~/jupyter_notebook_files/raw_rgb/tiff
+gsutil cp gs://big_earth/metadata/metadata_01.csv ~/jupyter_notebook_files/metadata
+gsutil cp -R gs://big_earth/metadata ~/jupyter_notebook_files
+
+## Run local tensorflow notebook
+```bash
+docker pull jupyter/tensorflow-notebook
+
+# Don't add anything to the directory at first or you'll get permission errors:
+# https://github.com/jupyter/docker-stacks/issues/542
+mkdir ~/jupyter_notebook_files
+
+docker run -it --rm -p 8889:8889 --volume ~/jupyter_notebook_files:/home/jovyan/work jupyter/tensorflow-notebook
+```
+
+
+## Set up Google Cloud notebook
+Deploy image
+`infrastructure/scripts/docker/build_run_deploy_docker_image.sh tensorflow-notebook data_science/jupyter_notebook/ False True`
+
+Deploy notebook
+```
+# Notebook parameters
+# export INPUT_NOTEBOOK_PATH="gs://my-bucket/input.ipynb"
+# export OUTPUT_NOTEBOOK_PATH="gs://my-bucket/output.ipynb"
+# export PARAMETERS_FILE="params.yaml" # Optional
+# export PARAMETERS="-p batch_size 128 -p epochs 40"  # Optional
+# export STARTUP_SCRIPT="papermill ${INPUT_NOTEBOOK_PATH} ${OUTPUT_NOTEBOOK_PATH} -y ${PARAMETERS_FILE} ${PARAMETERS}"
+# export STARTUP_SCRIPT="docker "
+
+gcloud compute instances create notebook \
+        --zone=us-west1-b \
+        --image-project=$PROJECT_ID \
+        --image=$BASE_IMAGE_NAME/tensorflow-notebook
+        --accelerator=nvidia-tesla-k80
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=50GB \
+```
 
 Ssh to instance and mount disk
 ```bash
