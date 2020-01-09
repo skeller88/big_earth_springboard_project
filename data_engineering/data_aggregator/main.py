@@ -19,13 +19,10 @@ from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
 def main():
     """
     Downloads tarfile from $GCS_BUCKET_NAME/$GCS_TARFILE_BLOB_NAME, extracts tarfile to $DISK_PATH, and then
-    traverses files in $DISK_PATH/$UNCOMPRESSED_BLOB_PREFIX. If $SHOULD_UPLOAD_AS_NPZ_FILE, writes npy file for each
-    image patch, compresses to npz file, and uploads to gcs. Otherwise, uploads tiff files to gcs. In both cases,
-    uploads metadata as json files to gcs.
+    traverses files in $DISK_PATH/$UNCOMPRESSED_BLOB_PREFIX.
     """
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
     tarfile_blob_name: str = os.environ.get("GCS_TARFILE_BLOB_NAME")
-    uncompressed_blob_prefix: str = os.environ.get("UNCOMPRESSED_BLOB_PREFIX")
     disk_path: str = os.environ.get("DISK_PATH")
 
     gcs_client = storage.Client()

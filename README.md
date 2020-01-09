@@ -122,6 +122,19 @@ gs://sk_spark_ops/create_spark_cluster.sh \
 gcloud dataproc jobs submit pyspark data_engineering/spark_metadata_aggregator.py --cluster=spark-cluster --region=us-west1
 ```
 
+# Data exploration and preparation
+
+```
+gcloud compute instances create-with-container data-prep \
+        --zone=us-west1-b \
+        --container-image=$BASE_IMAGE_NAME/tensorflow-notebook \
+        --container-mount-disk name=data-prep,mount-path=/data-prep,mode=rw \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-16 \
+        --boot-disk-size=10GB \
+        --create-disk name=big-earth-data-prep,mode=rw,size=100GB
+```
+
 # Model training
 
 ## Add data to local disk

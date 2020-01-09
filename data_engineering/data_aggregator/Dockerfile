@@ -1,5 +1,4 @@
-FROM python:3.6-alpine as base
-FROM base as builder
+FROM jupyter/tensorflow-notebook
 
 ARG filedir
 
@@ -7,15 +6,12 @@ ARG filedir
 #RUN curl -sSO https://dl.google.com/cloudagents/install-monitoring-agent.sh
 #RUN bash install-monitoring-agent.sh
 
-RUN echo "filedir" $filedir
-
 RUN mkdir /install
 WORKDIR /install
 
 COPY data_engineering/data_aggregator/requirements.txt /requirements.txt
 RUN pip install --install-option="--prefix=/install" -r /requirements.txt
 
-FROM base
 COPY --from=builder /install /usr/local
 COPY ./data_engineering /app/data_engineering
 COPY ./.gcs /app/.gcs
