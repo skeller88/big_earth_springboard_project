@@ -349,22 +349,23 @@ def graph_model_history(history):
     l2 = ax2.legend(loc="best")
 
 n_epochs = 100
-batch_size = 128
 model = basic_cnn_model((120, 120, 3), n_classes=n_classes)
 model_preprocess_func = None
+fs = gcsfs.GCSFileSystem(project='big_earth', token='cloud')
 
-x = df_labels.index.values
-# Example: raw_rgb/tiff/S2A_MSIL2A_20170613T101031_0_45/S2A_MSIL2A_20170613T101031_0_45_B02.tif
+x = df_labels['image_prefix'].values
+# Example: gs://big_earth/raw_rgb/tiff/S2A_MSIL2A_20170613T101031_0_45/S2A_MSIL2A_20170613T101031_0_45_B02.tif
 x = train_path + "/" + x + "/" + x + "_B{}.tif"
+
 y = df_labels.drop(columns='image_prefix').values
 xtrain, xtest, ytrain, ytest = train_test_split(x, y, test_size=.2)
 # .8 * .25 = .2
 xtrain, xvalid, ytrain, yvalid = train_test_split(xtrain, ytrain, test_size=.25)
 
-# fs = gcsfs.GCSFileSystem(project='big_earth', token='cloud')
-# Basic testing that nothing goes wrong.
-a = AugmentedImageSequence(x=xtrain[:5], y=ytrain[:5], batch_size=len(xtrain[:5]),
-augmentations=AUGMENTATIONS_TRAIN, model_preprocess_func=lambda x: x, bucket=bucket)
+# Test the correctness and speed of loading one batch
+batch_size = 128
+a = AugmentedImageSequence(x=xtrain[:batch_size], y=ytrain[:batch_size], batch_size=len(xtrain[:batch_size]),
+                           augmentations=AUGMENTATIONS_TRAIN, model_preprocess_func=lambda x: x, bucket=bucket)
 
 for x, y in a:
     print(x.shape, y.shape)

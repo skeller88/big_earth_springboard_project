@@ -122,19 +122,6 @@ gs://sk_spark_ops/create_spark_cluster.sh \
 gcloud dataproc jobs submit pyspark data_engineering/spark_metadata_aggregator.py --cluster=spark-cluster --region=us-west1
 ```
 
-# Data preparation
-Download BigEarth data
-
-```bash
-export DIR_WITHOUT_CLOUDS_AND_SNOW=<put BigEarth data without clouds and snow here>
-
-```
-
-```bash
-python $PROJECT_DIR/eliminate_snowy_cloudy_patches.py -r ~/Documents/BigEarthNet-v1.0/ -e \
-patches_with_cloud_and_shadow.csv patches_with_seasonal_snow.csv -d DIR_WITHOUT_CLOUDS_AND_SNOW
-```
-
 # Model training
 
 ## Add data to local disk
@@ -153,7 +140,7 @@ docker pull jupyter/tensorflow-notebook
 # https://github.com/jupyter/docker-stacks/issues/542
 mkdir ~/jupyter_notebook_files
 
-docker run -it --rm -p 8889:8889 --volume ~/jupyter_notebook_files:/home/jovyan/work jupyter/tensorflow-notebook
+docker run -it --rm -p 8888:8888 --volume ~/jupyter_notebook_files:/home/jovyan/work jupyter/tensorflow-notebook
 ```
 
 

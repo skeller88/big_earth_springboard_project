@@ -8,8 +8,10 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from queue import Queue, Empty
 from typing import List
 
+import imageio
 from google.api_core.retry import Retry
 from google.cloud import storage
+import numpy as np
 
 from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
 
@@ -17,7 +19,9 @@ from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
 def main():
     """
     Downloads tarfile from $GCS_BUCKET_NAME/$GCS_TARFILE_BLOB_NAME, extracts tarfile to $DISK_PATH, and then
-    traverses files in $DISK_PATH/$UNCOMPRESSED_BLOB_PREFIX. Uploads tiff and json files to gcs.
+    traverses files in $DISK_PATH/$UNCOMPRESSED_BLOB_PREFIX. If $SHOULD_UPLOAD_AS_NPZ_FILE, writes npy file for each
+    image patch, compresses to npz file, and uploads to gcs. Otherwise, uploads tiff files to gcs. In both cases,
+    uploads metadata as json files to gcs.
     """
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
     tarfile_blob_name: str = os.environ.get("GCS_TARFILE_BLOB_NAME")
@@ -66,7 +70,13 @@ def main():
         "checkpoint": 1000
     }
 
-    upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix, extraction_path)
+
+def stack_image_bands_for_filename(base_filename):
+    bands = []
+    for band in ["02", "03", "04"]:
+        bands.append(imageio.core.asarray(imageio.imread(base_filename.format(band), 'TIFF')))
+    return np.stack(bands, axis=-1)
+
 
 
 def upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix, extraction_path):

@@ -8,6 +8,10 @@ from data_engineering.gcs_stream_uploader import GCSObjectStreamUploader
 
 
 def main():
+    """
+    Download raw .tar.gz file from BigEarthNet and upload to Google Cloud Storage.
+    :return:
+    """
     url = "http://bigearth.net/downloads/BigEarthNet-v1.0.tar.gz"
     gcs_client = storage.Client()
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
