@@ -22,6 +22,7 @@ def main():
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
     tarfile_blob_name: str = os.environ.get("GCS_TARFILE_BLOB_NAME")
     uncompressed_blob_prefix: str = os.environ.get("UNCOMPRESSED_BLOB_PREFIX")
+    should_upload_tiff_and_json_files: bool = os.environ.get("SHOULD_UPLOAD_TIFF_AND_JSON_FILES") == "True"
     disk_path: str = os.environ.get("DISK_PATH")
 
     gcs_client = storage.Client()
@@ -32,41 +33,61 @@ def main():
     tarfile_disk_path: str = disk_path + "/" + tarfile_blob_name
 
     if os.environ.get("SHOULD_DOWNLOAD_TARFILE") == "True":
+        start = time.time()
         logger.info(f"Downloading BigEarth tarfile from bucket {bucket_name} and blob {tarfile_blob_name}, saving to "
                     f"{tarfile_disk_path}")
 
-        print("disk_path contents before download", os.listdir(disk_path))
         with GCSObjectStreamDownloader(client=gcs_client, bucket_name=bucket_name,
                                        blob_name=tarfile_blob_name) as gcs_downloader:
-            print("tarfile_disk_path", tarfile_disk_path)
+            logger.info("tarfile_disk_path", tarfile_disk_path)
             with open(tarfile_disk_path, 'wb') as fileobj:
                 chunk = gcs_downloader.read()
                 while chunk != b"":
                     fileobj.write(chunk)
                     chunk = gcs_downloader.read()
-
-        print("disk_path contents after download", os.listdir(disk_path))
+        logger.info(
+            f"Downloaded tarfile in {(time.time() - start) / 60} minutes.")
 
     extraction_path = tarfile_disk_path.replace(".gz", "").replace(".tar", "")
     logger.info(f"extraction_path: {extraction_path}")
 
+    start = time.time()
     if os.environ.get("SHOULD_EXTRACT_TARFILE") == "True":
         with tarfile.open(tarfile_disk_path, 'r') as fileobj:
-            fileobj.extractall(path=disk_path)
-        logger.info(f"tar extracted from {tarfile_disk_path} to {extraction_path}")
+            members = fileobj.getmembers()
+
+            def extract(members):
+                with tarfile.open(tarfile_disk_path, 'r') as fileobj:
+                    for member in members:
+                        fileobj.extract(member, path=disk_path)
+
+            num_workers = 5
+            chunk_size = len(members) // num_workers
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                start = 0
+                for _ in num_workers:
+                    end = min(start + chunk_size, len(members))
+                    print(start, end)
+                    executor.submit(extract, members[start:end])
+                    start = end
+
+        logger.info(
+            f"tar extracted from {tarfile_disk_path} to {extraction_path} in {(time.time() - start) / 60} minutes.")
 
     bucket = gcs_client.bucket(bucket_name)
 
-    # Don't use walk because filenames will have thousands of files. Iterate one by one instead
-    filepaths_to_upload = Queue()
+    if should_upload_tiff_and_json_files:
+        # Don't use walk because filenames will have thousands of files. Iterate one by one instead
+        filepaths_to_upload = Queue()
 
-    stats = {
-        "num_files_uploaded": 0,
-        "num_folders_uploaded": 0,
-        "checkpoint": 1000
-    }
+        stats = {
+            "num_files_uploaded": 0,
+            "num_folders_uploaded": 0,
+            "checkpoint": 1000
+        }
 
-    upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix, extraction_path)
+        upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix,
+                                   extraction_path)
 
 
 def upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix, extraction_path):

@@ -124,6 +124,12 @@ gcloud dataproc jobs submit pyspark data_engineering/spark_metadata_aggregator.p
 
 # Data exploration and preparation
 
+export FILEDIR=data_engineering/archive_etler_to_google_cloud
+docker build -t $BASE_IMAGE_NAME/archive_etler_to_google_cloud \
+--file $FILEDIR/Dockerfile --build-arg filedir=$FILEDIR .
+
+docker run -dit --rm -p 8888:8888 --env-file $FILEDIR/env.list --volume ~/jupyter_notebook_files:/app $BASE_IMAGE_NAME/archive_etler_to_google_cloud
+
 ```
 gcloud compute instances create-with-container data-prep \
         --zone=us-west1-b \
