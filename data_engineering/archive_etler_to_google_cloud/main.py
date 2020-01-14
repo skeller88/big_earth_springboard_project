@@ -56,10 +56,16 @@ def main():
         with tarfile.open(tarfile_disk_path, 'r') as fileobj:
             members = fileobj.getmembers()
 
+            logger.info(f"Tarfile has {len(members)} files.")
+
             def extract(members):
                 with tarfile.open(tarfile_disk_path, 'r') as fileobj:
+                    num_extracted = 0
                     for member in members:
                         fileobj.extract(member, path=disk_path)
+                        num_extracted += 1
+                        if num_extracted % 1e5 == 0:
+                            logger.info(f"extracted {num_extracted} files.")
 
             num_workers = 5
             chunk_size = len(members) // num_workers

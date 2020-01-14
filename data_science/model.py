@@ -4,6 +4,7 @@
 
 # Input data files are available in the "../input/" directory.
 # For example, running this (by clicking run or pressing Shift+Enter) will list the files in the input directory
+from big_earth_springboard_project.data_science.image_loading import AugmentedImageSequenceFromDisk
 !sudo pip3 install albumentations tensorflow-addons
 
 import io
@@ -137,75 +138,6 @@ AUGMENTATIONS_TRAIN = Compose([
 
 AUGMENTATIONS_TEST = Compose([])
 
-
-class AugmentedImageSequence(Sequence):
-    def __init__(self, x: np.array, y: np.array, batch_size, model_preprocess_func, augmentations, bucket):
-        self.x = x.copy()
-
-        if y is not None:
-            self.y = y.copy()
-        else:
-            self.y = y
-        self.base_index = [idx for idx in range(len(x))]
-        self.batch_size = batch_size
-        self.model_preprocess_func = model_preprocess_func
-        self.augmentations = augmentations
-        self.bucket = bucket
-
-    def __len__(self):
-        return int(np.ceil(len(self.x) / self.batch_size))
-
-    def __getitem__(self, batch_num):
-        if batch_num == 0:
-            print('getting batch_num', batch_num)
-            start = time.time()
-
-        batch_x = self.x[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
-
-        if self.y is not None:
-            batch_y = self.y[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
-
-        start = time.time()
-        if self.model_preprocess_func:
-            images = [self.model_preprocess_func(self.load_image_bands_from_gcs(image_path)) for image_path in batch_x]
-        else:
-            images = [self.load_image_bands_from_gcs(image_path) for image_path in batch_x]
-
-        # training
-        if self.y is not None:
-            batch_x = np.stack([self.augmentations(image=x)["image"] for x in images], axis=0)
-
-            if batch_num == 0:
-                print('fetched batch_num', batch_num, 'in', time.time() - start, 'seconds')
-
-            return batch_x, batch_y
-        # test (inference only)
-        else:
-            return np.array(images)
-
-    def load_image_bands_from_gcs(self, base_filename):
-        bands = []
-        for band in ["02", "03", "04"]:
-            blob = self.bucket.blob(base_filename.format(band))
-            obj = blob.download_as_string()
-            # r = self.fs.cat(base_filename.format(band))
-            bands.append(imageio.core.asarray(imageio.imread(obj, 'TIFF')))
-        return np.stack(bands, axis=-1)
-
-    def on_epoch_end(self):
-        # Can't figure out how to pass in the epoch variable
-        #         print_with_stdout(f"epoch {epoch}, logs {logs}")
-        #         if logs is not None:
-        #             print_with_stdout(f"finished epoch {epoch} with accuracy {logs['acc']} and val_loss {logs['val_loss']}")
-        #         else:
-        #             print_with_stdout(f"finished epoch {epoch}")
-        # https://stackoverflow.com/questions/29576430/shuffle-dataframe-rows
-        shuffled_index = self.base_index.copy()
-        random.shuffle(shuffled_index)
-        self.x = self.x[shuffled_index]
-
-        if self.y is not None:
-            self.y = self.y[shuffled_index]
 
 def basic_cnn_model(img_shape, n_classes):
     """
@@ -364,8 +296,8 @@ xtrain, xvalid, ytrain, yvalid = train_test_split(xtrain, ytrain, test_size=.25)
 
 # Test the correctness and speed of loading one batch
 batch_size = 128
-a = AugmentedImageSequence(x=xtrain[:batch_size], y=ytrain[:batch_size], batch_size=len(xtrain[:batch_size]),
-                           augmentations=AUGMENTATIONS_TRAIN, model_preprocess_func=lambda x: x, bucket=bucket)
+a = AugmentedImageSequenceFromDisk(x=xtrain[:batch_size], y=ytrain[:batch_size], batch_size=len(xtrain[:batch_size]),
+                           augmentations=AUGMENTATIONS_TRAIN)
 
 for x, y in a:
     print(x.shape, y.shape)

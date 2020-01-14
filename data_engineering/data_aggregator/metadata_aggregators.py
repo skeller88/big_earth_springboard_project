@@ -97,7 +97,7 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, ou
     # https://stackoverflow.com/questions/31361721/python-dask-dataframe-support-for-trivially-parallelizable-row-apply
     dfml = df.map_partitions(multi_label_binarize_df, meta=df.head(0)).compute(scheduler='processes')
 
-    # Denote if patch has snow and/or clouds
+    # Denote if patch has snow and/or cloudsrandom_state
     snow = pd.read_csv(os.path.join(cloud_and_snow_csv_dir, 'patches_with_seasonal_snow.csv'), header=None, names=['image_prefix'])
     snow_col = 'has_snow'
     snow[snow_col] = 1

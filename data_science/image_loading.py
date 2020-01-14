@@ -1,68 +1,23 @@
-from data_science.augmented_image_sequence import AugmentedImageSequence
-!sudo
-pip3
-install
-albumentations
-tensorflow - addons
-
-import io
-from albumentations import (
-    Compose, Flip, VerticalFlip, Resize, Rotate, ToFloat
-)
-import time
-
-from concurrent import futures
-from collections import Counter, defaultdict
-
-import datetime
-
 import os
 
-print(os.listdir("."))
-import threading
+from big_earth_springboard_project.data_science.augmented_image_sequence import AugmentedImageSequence
 
-import gc
-import gcsfs
-from glob import glob
+print(os.listdir("."))
+
 import imageio
 from google.cloud import storage
-from google.oauth2 import service_account
 
 import numpy as np
 import pandas as pd
 
 import time
 
-import scipy
-from scipy.stats import bernoulli
 import seaborn as sns
-from sklearn.multiclass import OneVsRestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV, train_test_split, KFold
-from sklearn.preprocessing import MultiLabelBinarizer, MinMaxScaler
-from sklearn.metrics import fbeta_score, precision_score, make_scorer, average_precision_score
-
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.optimizers import Adam, SGD, RMSprop
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, History, TensorBoard
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import BatchNormalization, Dense, Dropout, Flatten, Input
-from tensorflow.keras.layers import Conv2D, MaxPooling2D
-from tensorflow.keras.metrics import Accuracy, Precision, Recall
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.utils import Sequence
-
-from tensorflow_addons.metrics import FBetaScore, F1Score
-
-from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
 import random
 
-import warnings
-
 pal = sns.color_palette()
-from sklearn.model_selection import StratifiedShuffleSplit
 
 import tensorflow as tf
 
@@ -74,6 +29,93 @@ tf.random.set_seed(random_seed)
 test_names = ['name_{}'.format(num) for num in range(128)]
 
 import shutil
+
+# Version 5 - write to zarr
+def load_image_bands_from_disk(base_filename):
+    bands = []
+    for band in ["02", "03", "04"]:
+        bands.append(imageio.core.asarray(imageio.imread(base_filename.format(band), 'TIFF')))
+    return np.stack(bands, axis=-1)
+
+
+def load_and_write_xarray_imgs(filenames):
+    imgs = np.array([load_image_bands_from_disk(filename) for filename in filenames.values])
+    arr = xr.DataArray(imgs, [('name', filenames.values),
+                              ('x', [num for num in range(120)]),
+                              ('y', [num for num in range(120)]),
+                              ('bands', ['red', 'green', 'blue']),
+                              ])
+
+    filename = f'zarr_data/imgs_{filenames.index[0]}.zarr'
+    ds = xr.Dataset({'data': arr})
+    ds.to_zarr(filename)
+    #     fs = gcsfs.GCSFileSystem(project='big_earth', token="/home/jovyan/work/.gcs/big-earth-252219-fb2e5c109f78.json")
+    #     gcsmap = gcsfs.mapping.GCSMap('big_earth', gcs=fs, check=True, create=False)
+    #     ds.to_zarr(store=gcsmap)
+    return filename
+
+
+start_time = time.time()
+num_workers = 20
+subset = sample.iloc[:30]['filepath']
+chunk_size = len(subset) // num_workers
+with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    tasks = []
+    start = 0
+    for _ in range(num_workers):
+        end = min(start + chunk_size, len(subset))
+        tasks.append(executor.submit(load_and_write_xarray_imgs, subset[start:end]))
+        start = end
+
+filenames = [task.result() for task in tasks]
+print(f'wrote files in {time.time() - start_time} seconds')
+
+
+# Version 4 - load from bucket all at once
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/jovyan/work/.gcs/big-earth-252219-fb2e5c109f78.json"
+
+from concurrent.futures import Future, as_completed
+from concurrent.futures.thread import ThreadPoolExecutor
+
+
+def load_image_bands_from_gcs(filenames):
+    credentials = service_account.Credentials.from_service_account_file(
+        "/home/jovyan/work/.gcs/big-earth-252219-fb2e5c109f78.json")
+    gcs_client = storage.Client(credentials=credentials)
+    bucket = gcs_client.bucket("big_earth")
+
+    imgs = []
+    for filename in filenames:
+        bands = []
+        for band in ["02", "03", "04"]:
+            blob = bucket.blob(filename.format(band))
+            obj = blob.download_as_string()
+            bands.append(imageio.core.asarray(imageio.imread(obj, 'TIFF')))
+        imgs.append(np.stack(bands, axis=-1))
+
+    return xr.DataArray(np.array(imgs), [('name', filenames),
+                                         ('x', [num for num in range(120)]),
+                                         ('y', [num for num in range(120)]),
+                                         ('bands', ['red', 'green', 'blue']),
+                                         ])
+
+
+start_time = time.time()
+num_workers = 20
+subset = sample['gcs_base_path'].iloc[:10000]
+chunk_size = len(subset) // num_workers
+with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    tasks = []
+    start = 0
+    for _ in range(num_workers):
+        end = min(start + chunk_size, len(subset))
+
+        tasks.append(executor.submit(load_image_bands_from_gcs, subset[start:end]))
+        start = end
+arr = xr.concat([task.result() for task in tasks], dim='name')
+
+print(f'loaded data in {time.time() - start_time} seconds')
+
 
 # Version 3 - load from numpy array
 class AugmentedImageSequenceFromNpz(AugmentedImageSequence):
