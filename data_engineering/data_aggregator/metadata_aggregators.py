@@ -8,37 +8,30 @@
 import glob
 import json
 import os
+import shutil
+import time
 from hashlib import sha256
 
 import dask.bag as db
 
 import pandas as pd
 
-import re
 
+def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, csv_files_path):
+    if not os.path.exists(csv_files_path):
+        os.mkdir(csv_files_path)
+    else:
+        shutil.rmtree(csv_files_path)
 
-def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, output_dir):
-    metadata_dir = output_dir + "/metadata"
-    if not os.path.exists(metadata_dir):
-        os.mkdir(metadata_dir)
-
+    # From BigEarth team: we used the same labels of the CORINE Land Cover​ program operated by the European Environment
+    # Agency. You can check the label names from
+    # https://land.copernicus.eu/user-corner/technical-library/corine-land-cover-nomenclature-guidelines/html/.
     replacements = {
-        'Bare rock': 'Bare rocks',
-        'Natural grassland': 'Natural grasslands',
-        'Peatbogs': 'Peat bogs',
-        'Transitional woodland/shrub': 'Transitional woodland-shrub'
+        'Bare rocks': 'Bare rock',
+        'Natural grasslands': 'Natural grassland',
+        'Peat bogs': 'Peatbogs',
+        'Transitional woodland-shrub': 'Transitional woodland/shrub'
     }
-
-    # Place longer ones first to keep shorter substrings from matching where the longer ones should take place
-    # For instance given the replacements {'ab': 'AB', 'abc': 'ABC'} against the string 'hey abc', it should produce
-    # 'hey ABC' and not 'hey ABc'
-    rep_sorted = sorted(replacements, key=len, reverse=True)
-
-    # Return string with all non-alphanumerics backslashed; this is useful if you want to match an arbitrary literal string that may have regular expression metacharacters in it.
-    rep_escaped = map(re.escape, rep_sorted)
-
-    # Create a big OR regex that matches any of the substrings to replace
-    pattern = re.compile("|".join(rep_escaped))
 
     def multi_replace(arr):
         return [replacements[el] if replacements.get(el) is not None else el for el in arr]
@@ -57,29 +50,33 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, ou
     glob_path = json_dir + '/**/*.json'
     paths = glob.glob(glob_path)
     logger.info(f"Fetched {len(paths)} paths.")
+    start = time.time()
     paths_with_indexes = [(index, path) for index, path in enumerate(paths)]
-    metadata = db.from_sequence(paths_with_indexes).map(read_and_augment_metadata)
+    metadata = db.from_sequence(paths_with_indexes, npartitions=50).map(read_and_augment_metadata)
     df = metadata.to_dataframe()
     df = df.set_index('index')
 
     # Check the dimensions
     logger.info(df.shape[0].compute())
+    logger.info(f"Read files into dataframe in {time.time() - start} seconds.")
 
     # 44 level 3 classes:
     # Currently using:
-    # https://land.copernicus.eu/eagle/files/eagle-related-projects/pt_clc-conversion-to-fao-lccs3_dec2010
-    # Should be using:
     # https://land.copernicus.eu/user-corner/technical-library/corine-land-cover-nomenclature-guidelines/html/
     clc = ["Continuous urban fabric", "Discontinuous urban fabric", "Industrial or commercial units",
-           "Road and rail networks and associated land", "Port areas", "Airports", "Mineral extraction sites", "Dump sites",
+           "Road and rail networks and associated land", "Port areas", "Airports", "Mineral extraction sites",
+           "Dump sites",
            "Construction sites", "Green urban areas", "Sport and leisure facilities", "Non-irrigated arable land",
-           "Permanently irrigated land", "Rice fields", "Vineyards", "Fruit trees and berry plantations", "Olive groves",
+           "Permanently irrigated land", "Rice fields", "Vineyards", "Fruit trees and berry plantations",
+           "Olive groves",
            "Pastures", "Annual crops associated with permanent crops", "Complex cultivation patterns",
-           "Land principally occupied by agriculture, with significant areas of natural vegetation", "Agro-forestry areas",
-           "Broad-leaved forest", "Coniferous forest", "Mixed forest", "Natural grasslands", "Moors and heathland",
-           "Sclerophyllous vegetation", "Transitional woodland-shrub", "Beaches, dunes, sands", "Bare rocks",
-           "Sparsely vegetated areas", "Burnt areas", "Glaciers and perpetual snow", "Inland marshes", "Peat bogs",
-           "Salt marshes", "Salines", "Intertidal flats", "Water courses", "Water bodies", "Coastal lagoons", "Estuaries",
+           "Land principally occupied by agriculture, with significant areas of natural vegetation",
+           "Agro-forestry areas",
+           "Broad-leaved forest", "Coniferous forest", "Mixed forest", "Natural grassland", "Moors and heathland",
+           "Sclerophyllous vegetation", "Transitional woodland/shrub", "Beaches, dunes, sands", "Bare rock",
+           "Sparsely vegetated areas", "Burnt areas", "Glaciers and perpetual snow", "Inland marshes", "Peatbogs",
+           "Salt marshes", "Salines", "Intertidal flats", "Water courses", "Water bodies", "Coastal lagoons",
+           "Estuaries",
            "Sea and ocean"]
 
     for column in clc:
@@ -123,12 +120,6 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, ou
     assert dfml[snow_col].sum() == len_snow
     assert dfml[cloud_col].sum() == len_clouds
 
-    # Atomically write to metadata_dir
-    import shutil
+    dfml.to_csv(csv_files_path + '/metadata.csv')
 
-    if os.path.exists(metadata_dir):
-        shutil.rmtree(metadata_dir)
-
-    os.mkdir(metadata_dir)
-
-    dfml.to_csv(metadata_dir + '/metadata.csv')
+    return dfml

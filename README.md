@@ -27,7 +27,82 @@ export HOSTNAME=us.gcr.io
 export BASE_IMAGE_NAME=$HOSTNAME/$PROJECT_ID
 ```
 
-# Data exploration and preparation with Spark
+# Data exploration and preparation with Dask/Spark
+## Prototype locally
+```
+docker pull jupyter/tensorflow-notebook
+docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work jupyter/tensorflow-notebook
+```
+
+Navigate to the `data_engineering/data_aggregator` folder for prototype
+notebooks.
+
+## Run ETL image locally and deploy to google cloud
+export FILEDIR=data_engineering/archive_etler
+export IMAGE_NAME=$BASE_IMAGE_NAME/archive_etler
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile --build-arg filedir=$FILEDIR .
+docker push $IMAGE_NAME
+docker run -it --rm -p 8888:8888 --volume ~:/big_earth_data $IMAGE_NAME
+
+## Run on google cloud
+```
+# First time
+gcloud compute instances create-with-container archive-etler \
+        --zone=us-west1-b \
+        --container-image=$IMAGE_NAME \
+        --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
+        --container-env-file=$FILEDIR/env.list \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=10GB \
+        --create-disk=name=big-earth-data,mode=rw,size=200GB,type=pd-ssd
+
+# start and stop
+gcloud compute instances stop archive-etler
+gcloud compute instances start archive-etler
+
+# ssh to instance and unmount disk
+sudo umount /dev/disk/by-id/google-DEVICE_NAME
+
+# stop instance and detach the disk when done with ETL
+gcloud compute instances stop archive-etler
+gcloud compute instances detach-disk archive-etler --disk=big-earth-data
+
+# Subsequent times
+# First time
+gcloud compute instances create-with-container archive-etler \
+        --zone=us-west1-b \
+        --container-image=$IMAGE_NAME \
+        --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
+        --container-env-file=$FILEDIR/env.list \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=10GB \
+        --disk=name=big-earth-data,mode=rw,auto-delete=no,device-name=big-earth-data
+```
+
+# Model training
+```
+export FILEDIR=data_science/model_trainer
+export IMAGE_NAME=$BASE_IMAGE_NAME/model_trainer
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile --build-arg filedir=$FILEDIR .
+docker push $IMAGE_NAME
+docker run -it --rm -p 8888:8888 --volume ~:/big_earth_data $IMAGE_NAME
+
+gcloud compute instances create-with-container model-trainer \
+        --zone=us-west1-b \
+        --accelerator=count=1,type=nvidia-tesla-v100 \
+        --can-ip-forward \
+        --container-image=$IMAGE_NAME \
+        --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=10GB \
+        --disk=name=big-earth-data,mode=rw,auto-delete=no,device-name=big-earth-data
+```
+
+# Scratch work
+
 ## Local prototype with Spark notebook
 ```bash
 docker pull jupyter/pyspark-notebook

@@ -26,7 +26,7 @@ def main():
     disk_path: str = os.environ.get("DISK_PATH")
 
     gcs_client = storage.Client()
-    logger = logging.Logger("archive_etler_to_google_cloud", level=logging.INFO)
+    logger = logging.Logger("archive_etler", level=logging.INFO)
     handler = logging.StreamHandler(sys.stdout)
     logger.addHandler(handler)
 

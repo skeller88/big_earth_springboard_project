@@ -1,16 +1,20 @@
-import imageio
+import os
 
+import dask.bag as db
 import numpy as np
+from PIL import Image
 
 
-def image_files_from_tiff_to_npy(logger, image_dir, image_names, output_filepath):
-    def get_rgb_bands_from_filename_as_npy(image_dir, image_name):
-        imgs = []
-        for band in ["B02", "B03", "B04"]:
-            image_filename = f"{image_dir}/{image_name}{image_name}_{band}.tif"
-            imgs.append(imageio.core.asarray(imageio.imread(image_filename, 'TIFF')))
-        return np.stack(imgs, axis=-1).flatten()
+def image_files_from_tif_to_npy(npy_files_path, image_dir, image_prefixes):
+    if not os.path.exists(npy_files_path):
+        os.mkdir(npy_files_path)
 
-    obj = {image_name: get_rgb_bands_from_filename_as_npy(image_dir, image_name) for image_name in image_names}
+    def image_to_npy(image_prefix):
+        bands = [np.asarray(
+            Image.open(f"{image_dir}/{image_prefix}/{image_prefix}_B{band}.tif"),
+            dtype=np.uint16) for band in ["02", "03", "04"]]
 
-    np.savez_compressed(output_filepath, **obj)
+        stacked_arr = np.stack(bands, axis=-1)
+        np.save(f"{npy_files_path}/{image_prefix}", stacked_arr)
+
+    db.from_sequence(image_prefixes).map(image_to_npy).compute()

@@ -12,7 +12,7 @@ ARG filedir
 RUN mkdir /install
 WORKDIR /install
 
-COPY data_engineering/archive_etler_to_google_cloud/requirements.txt /requirements.txt
+COPY data_engineering/archive_etler/requirements.txt /requirements.txt
 RUN pip install --install-option="--prefix=/install" -r /requirements.txt
 
 FROM base
@@ -25,4 +25,4 @@ WORKDIR /app
 # Allow python to discover modules
 ENV PYTHONPATH "${PYTHONPATH}:/app"
 
-CMD ["python", "./data_engineering/archive_etler_to_google_cloud/main.py"]
+CMD ["python", "./data_engineering/archive_etler/main.py"]
