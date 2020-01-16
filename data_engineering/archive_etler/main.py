@@ -43,7 +43,7 @@ def main():
 
         with GCSObjectStreamDownloader(client=gcs_client, bucket_name=bucket_name,
                                        blob_name=tarfile_blob_name) as gcs_downloader:
-            logger.info("tarfile_disk_path", tarfile_disk_path)
+            logger.info(f"tarfile_disk_path: {tarfile_disk_path}")
             with open(tarfile_disk_path, 'wb') as fileobj:
                 chunk = gcs_downloader.read()
                 while chunk != b"":

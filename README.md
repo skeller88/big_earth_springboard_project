@@ -40,9 +40,11 @@ notebooks.
 ## Run ETL image locally and deploy to google cloud
 export FILEDIR=data_engineering/archive_etler
 export IMAGE_NAME=$BASE_IMAGE_NAME/archive_etler
-docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile --build-arg filedir=$FILEDIR .
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile .
 docker push $IMAGE_NAME
-docker run -it --rm -p 8888:8888 --volume ~:/big_earth_data $IMAGE_NAME
+docker run -it --rm -p 8888:8888 \
+--volume ~/test:/big_earth_data \
+--env-file $FILEDIR/env.list $IMAGE_NAME
 
 ## Run on google cloud
 ```
@@ -54,15 +56,16 @@ gcloud compute instances create-with-container archive-etler \
         --container-env-file=$FILEDIR/env.list \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
+        --metadata-from-file=startup-script=startup_script.sh \
         --boot-disk-size=10GB \
-        --create-disk=name=big-earth-data,mode=rw,size=200GB,type=pd-ssd
+        --create-disk=name=big-earth-data,auto-delete=no,mode=rw,size=200GB,type=pd-ssd,device-name=big-earth-data
 
 # start and stop
 gcloud compute instances stop archive-etler
 gcloud compute instances start archive-etler
 
 # ssh to instance and unmount disk
-sudo umount /dev/disk/by-id/google-DEVICE_NAME
+sudo umount /dev/disk/by-id/google-big-earth-data
 
 # stop instance and detach the disk when done with ETL
 gcloud compute instances stop archive-etler
@@ -78,10 +81,33 @@ gcloud compute instances create-with-container archive-etler \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
         --boot-disk-size=10GB \
-        --disk=name=big-earth-data,mode=rw,auto-delete=no,device-name=big-earth-data
+        --disk=name=big-earth-data,auto-delete=no,mode=rw,device-name=big-earth-data
+
 ```
 
 # Model training
+## Prototype with Jupyter notebook
+```
+export FILEDIR=data_science/jupyter_tensorflow_notebook
+export IMAGE_NAME=$BASE_IMAGE_NAME/jupyter_tensorflow_notebook
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile
+docker push $IMAGE_NAME
+docker run -it --rm -p 8888:8888 --volume ~:/big_earth_data $IMAGE_NAME
+
+gcloud compute instances create-with-container jupyter-tensorflow-notebook \
+        --zone=us-west1-b \
+        --accelerator=count=1,type=nvidia-tesla-v100 \
+        --can-ip-forward \
+        --container-image=$IMAGE_NAME \
+        --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
+        --preemptible \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=10GB \
+        --disk=name=big-earth-data,mode=rw,auto-delete=no,device-name=big-earth-data
+```
+
+## Train
 ```
 export FILEDIR=data_science/model_trainer
 export IMAGE_NAME=$BASE_IMAGE_NAME/model_trainer

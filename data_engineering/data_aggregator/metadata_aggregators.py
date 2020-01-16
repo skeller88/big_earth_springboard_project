@@ -1,10 +1,3 @@
-# Run on machine if missing these libraries
-# !pip3 install --upgrade scikit-learn
-# !pip3 install --upgrade dask
-# # This instance doesn't come with the necessary dependencies:
-# # https://github.com/dask/distributed/issues/962
-# !pip3 install dask[complete] distributed --upgrade
-
 import glob
 import json
 import os
@@ -12,9 +5,10 @@ import shutil
 import time
 from hashlib import sha256
 
-import dask.bag as db
-
 import pandas as pd
+from sklearn.preprocessing import MultiLabelBinarizer
+
+from data_engineering.data_aggregator.parallelize import parallelize_task
 
 
 def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, csv_files_path):
@@ -36,34 +30,28 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     def multi_replace(arr):
         return [replacements[el] if replacements.get(el) is not None else el for el in arr]
 
-    def read_and_augment_metadata(path_tuple):
-        metadata_file = path_tuple[1]
-        with open(metadata_file) as fileobj:
+    def read_and_augment_metadata(mlb, json_metadata_file):
+        with open(json_metadata_file) as fileobj:
             obj = json.load(fileobj)
-            # Dask doesn't have a reindex method, so build the index as files are being read
-            obj['index'] = path_tuple[0]
             obj['labels'] = multi_replace(obj['labels'])
             obj['labels_sha256_hexdigest'] = sha256('-'.join(obj['labels']).encode('utf-8')).hexdigest()
-            obj['image_prefix'] = metadata_file.rsplit('/')[-2]
+            obj['binarized_labels'] = mlb.transform([obj['labels']])
+            obj['image_prefix'] = json_metadata_file.rsplit('/')[-2]
             return obj
 
+    def json_metadata_from_files(json_metadata_files, mlb):
+        return [read_and_augment_metadata(json_metadata_file, mlb) for json_metadata_file in json_metadata_files]
+
+    start = time.time()
     glob_path = json_dir + '/**/*.json'
     paths = glob.glob(glob_path)
-    logger.info(f"Fetched {len(paths)} paths.")
+    logger.info(f"Fetched {len(paths)} paths. in {time.time() - start} seconds.")
     start = time.time()
-    paths_with_indexes = [(index, path) for index, path in enumerate(paths)]
-    metadata = db.from_sequence(paths_with_indexes, npartitions=50).map(read_and_augment_metadata)
-    df = metadata.to_dataframe()
-    df = df.set_index('index')
-
-    # Check the dimensions
-    logger.info(df.shape[0].compute())
-    logger.info(f"Read files into dataframe in {time.time() - start} seconds.")
 
     # 44 level 3 classes:
     # Currently using:
     # https://land.copernicus.eu/user-corner/technical-library/corine-land-cover-nomenclature-guidelines/html/
-    clc = ["Continuous urban fabric", "Discontinuous urban fabric", "Industrial or commercial units",
+    classes = ["Continuous urban fabric", "Discontinuous urban fabric", "Industrial or commercial units",
            "Road and rail networks and associated land", "Port areas", "Airports", "Mineral extraction sites",
            "Dump sites",
            "Construction sites", "Green urban areas", "Sport and leisure facilities", "Non-irrigated arable land",
@@ -79,20 +67,16 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
            "Estuaries",
            "Sea and ocean"]
 
-    for column in clc:
-        df[column] = 0
+    mlb = MultiLabelBinarizer()
+    mlb.fit([classes])
+    # sanity check the output
+    logger.info(f"Sea and ocean: {mlb.transform([['Sea and ocean']])}")
 
-    def multi_label_binarize_row(row):
-        for label in row['labels']:
-            row[label] = 1
-        return row
-
-    def multi_label_binarize_df(df):
-        return df.apply(multi_label_binarize_row, axis=1)
-
-    # Custom apply function uses GIL. Can't use Numba because there are python-specific objects in the function.
-    # https://stackoverflow.com/questions/31361721/python-dask-dataframe-support-for-trivially-parallelizable-row-apply
-    dfml = df.map_partitions(multi_label_binarize_df, meta=df.head(0)).compute(scheduler='processes')
+    json_object_lists = parallelize_task(20, json_metadata_from_files, paths)
+    df = pd.concat([pd.DataFrame.from_records(json_object_list) for json_object_list in json_object_lists])
+    # Check the dimensions
+    assert len(df) == len(paths)
+    logger.info(f"Read files into dataframe in {time.time() - start} seconds.")
 
     # Denote if patch has snow and/or cloudsrandom_state
     snow = pd.read_csv(os.path.join(cloud_and_snow_csv_dir, 'patches_with_seasonal_snow.csv'), header=None, names=['image_prefix'])
@@ -112,14 +96,14 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     len_clouds = len(clouds)
 
     for column in [snow_col, cloud_col]:
-        dfml[column] = 0
+        df[column] = 0
 
-    dfml = dfml.set_index('image_prefix')
-    dfml.update(snow)
-    dfml.update(clouds)
-    assert dfml[snow_col].sum() == len_snow
-    assert dfml[cloud_col].sum() == len_clouds
+    df = df.set_index('image_prefix')
+    df.update(snow)
+    df.update(clouds)
+    assert df[snow_col].sum() == len_snow
+    assert df[cloud_col].sum() == len_clouds
 
-    dfml.to_csv(csv_files_path + '/metadata.csv')
+    df.to_csv(csv_files_path + '/metadata.csv')
 
-    return dfml
+    return df

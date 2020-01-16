@@ -1,8 +1,9 @@
 import os
 
-import dask.bag as db
 import numpy as np
 from PIL import Image
+
+from data_engineering.data_aggregator.parallelize import parallelize_task
 
 
 def image_files_from_tif_to_npy(npy_files_path, image_dir, image_prefixes):
@@ -17,4 +18,4 @@ def image_files_from_tif_to_npy(npy_files_path, image_dir, image_prefixes):
         stacked_arr = np.stack(bands, axis=-1)
         np.save(f"{npy_files_path}/{image_prefix}", stacked_arr)
 
-    db.from_sequence(image_prefixes).map(image_to_npy).compute()
+    parallelize_task(20, image_to_npy, image_prefixes)
