@@ -1,7 +1,6 @@
 import glob
 import json
 import os
-import shutil
 import time
 from hashlib import sha256
 
@@ -14,8 +13,6 @@ from data_engineering.data_aggregator.parallelize import parallelize_task
 def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, csv_files_path):
     if not os.path.exists(csv_files_path):
         os.mkdir(csv_files_path)
-    else:
-        shutil.rmtree(csv_files_path)
 
     # From BigEarth team: we used the same labels of the CORINE Land Cover​ program operated by the European Environment
     # Agency. You can check the label names from
@@ -30,12 +27,12 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     def multi_replace(arr):
         return [replacements[el] if replacements.get(el) is not None else el for el in arr]
 
-    def read_and_augment_metadata(mlb, json_metadata_file):
+    def read_and_augment_metadata(json_metadata_file, mlb):
         with open(json_metadata_file) as fileobj:
             obj = json.load(fileobj)
             obj['labels'] = multi_replace(obj['labels'])
             obj['labels_sha256_hexdigest'] = sha256('-'.join(obj['labels']).encode('utf-8')).hexdigest()
-            obj['binarized_labels'] = mlb.transform([obj['labels']])
+            obj['binarized_labels'] = json.dumps(mlb.transform([obj['labels']]))
             obj['image_prefix'] = json_metadata_file.rsplit('/')[-2]
             return obj
 
@@ -72,21 +69,23 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     # sanity check the output
     logger.info(f"Sea and ocean: {mlb.transform([['Sea and ocean']])}")
 
-    json_object_lists = parallelize_task(20, json_metadata_from_files, paths)
+    json_object_lists = parallelize_task(num_workers=20, iterator=paths, task=json_metadata_from_files, **dict(mlb=mlb))
     df = pd.concat([pd.DataFrame.from_records(json_object_list) for json_object_list in json_object_lists])
     # Check the dimensions
-    assert len(df) == len(paths)
+    logger.info(f"len(df): {len(df)}, len(paths): {len(paths)}")
     logger.info(f"Read files into dataframe in {time.time() - start} seconds.")
 
     # Denote if patch has snow and/or cloudsrandom_state
     snow = pd.read_csv(os.path.join(cloud_and_snow_csv_dir, 'patches_with_seasonal_snow.csv'), header=None, names=['image_prefix'])
     snow_col = 'has_snow'
     snow[snow_col] = 1
+    snow[f'{snow_col}_target'] = jdson.dumps(np.array([1]))
     snow = snow.set_index('image_prefix')
 
     clouds = pd.read_csv(os.path.join(cloud_and_snow_csv_dir, 'patches_with_cloud_and_shadow.csv'), header=None, names=['image_prefix'])
     cloud_col = 'has_cloud_and_shadow'
     clouds[cloud_col] = 1
+    clouds[f'{cloud_col}_target'] = json.dumps(np.array([1]))
     clouds = clouds.set_index('image_prefix')
 
     print(snow.head(3))
@@ -98,7 +97,10 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     for column in [snow_col, cloud_col]:
         df[column] = 0
 
-    df = df.set_index('image_prefix')
+    for column in [f"{snow_col}_target", f"{cloud_col}_target"]:
+        df[column] = json.dumps(np.array([0]))
+
+    df = df.set_index('image_prefix', drop=False)
     df.update(snow)
     df.update(clouds)
     assert df[snow_col].sum() == len_snow

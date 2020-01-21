@@ -21,9 +21,9 @@ def main():
 
     for url, blob_name in [
         ("http://bigearth.net/downloads/BigEarthNet-v1.0.tar.gz", blob_name),
-        ("http://bigearth.net/static/documents/patches_with_seasonal_cloud_and_shadow.csv",
-         "patches_with_seasonal_cloud_and_shadow.csv"),
-        ("http://bigearth.net/static/documents/patches_with_seasonal_snow.csv", "patches_with_seasonal_snow.csv"),
+        ("http://bigearth.net/static/documents/patches_with_cloud_and_shadow.csv",
+         "patches_with_cloud_and_shadow.csv"),
+        ("http://bigearth.net/static/documents/patches_with_snow.csv", "patches_with_seasonal_snow.csv"),
     ]:
         with GCSObjectStreamUploader(client=gcs_client, bucket_name=bucket_name, blob_name=blob_name) as gcs_uploader:
             with requests.get(url, stream=True) as response_stream:

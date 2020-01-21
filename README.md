@@ -43,7 +43,7 @@ export IMAGE_NAME=$BASE_IMAGE_NAME/archive_etler
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile .
 docker push $IMAGE_NAME
 docker run -it --rm -p 8888:8888 \
---volume ~/test:/big_earth_data \
+--volume ~:/big_earth_data \
 --env-file $FILEDIR/env.list $IMAGE_NAME
 
 ## Run on google cloud
@@ -71,12 +71,14 @@ sudo umount /dev/disk/by-id/google-big-earth-data
 gcloud compute instances stop archive-etler
 gcloud compute instances detach-disk archive-etler --disk=big-earth-data
 
+# Reattach disk
+gcloud compute instances attach-disk archive-etler --disk=big-earth-data
+
 # Subsequent times
-# First time
 gcloud compute instances create-with-container archive-etler \
         --zone=us-west1-b \
         --container-image=$IMAGE_NAME \
-        --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
+        --container-mount-disk=name=big-earth-data,mountf-path=/big-earth-data,mode=rw \
         --container-env-file=$FILEDIR/env.list \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
@@ -90,21 +92,106 @@ gcloud compute instances create-with-container archive-etler \
 ```
 export FILEDIR=data_science/jupyter_tensorflow_notebook
 export IMAGE_NAME=$BASE_IMAGE_NAME/jupyter_tensorflow_notebook
-docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
 docker push $IMAGE_NAME
-docker run -it --rm -p 8888:8888 --volume ~:/big_earth_data $IMAGE_NAME
+docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
 
+gcloud compute addresses create jupyter-tensorflow-notebook --region us-west1
+gcloud compute addresses list
+
+# Copy address from above output
+export IP_ADDRESS=[ip-address]
+export DISK_NAME=big-earth-data
+
+```
+
+## Create GCP instance from Google image family
+```
+# scopes needed are pub/sub, service control, service management, container registry,
+# stackdriver logging/trace/monitoring, storage
+# Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
+$IMAGE_NAME=gcr.io/deeplearning-platform-release/tf-gpu
 gcloud compute instances create-with-container jupyter-tensorflow-notebook \
+        --address=$IP_ADDRESS \
         --zone=us-west1-b \
         --accelerator=count=1,type=nvidia-tesla-v100 \
         --can-ip-forward \
         --container-image=$IMAGE_NAME \
-        --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
-        --preemptible \
+        --container-mount-disk=name=$DISK_NAME,mount-path=/$DISK_NAME,mode=rw \
+        --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
-        --boot-disk-size=10GB \
-        --disk=name=big-earth-data,mode=rw,auto-delete=no,device-name=big-earth-data
+        --boot-disk-size=50GB \
+        --metadata enable-oslogin=TRUE \
+        --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME
+
+# SSH to instance
+# password is
+Take me to your river succulent
+export DISK_NAME=big-earth-data
+export JUPYTER_USER=jovyan
+export JUPYTER_USER_DIR = /mnt/disks/gce-containers-mounts/gce-persistent-disks/$DISK_NAME/$JUPYTER_USER
+sudo useradd $JUPYTER_USER -g users
+
+sudo mkdir $JUPYTER_USER_DIR
+sudo chwon $JUPYTER_USER:users $JUPYTER_USER_DIR
+docker run -d -p 8888:8888 \
+--user root -e NB_USER=$JUPYTER_USER -e NB_GROUP=users \
+--volume /mnt/disks/gce-containers-mounts/gce-persistent-disks/$DISK_NAME:/home/jovyan/work \
+us.gcr.io/big-earth-252219/jupyter_tensorflow_notebook \
+start-notebook.sh --NotebookApp.password='sha1:3f5b37350f9d:716aaf131f345da3352ded1f952e6b36bea8add8'
+
+
+
+# Stop and start
+gcloud compute instances stop jupyter-tensorflow-notebook
+gcloud compute instances start jupyter-tensorflow-notebook
+
+# Delete
+gcloud compute instances delete jupyter-tensorflow-notebook
+```
+
+## Create GCP instance from Docker image
+TODO
+- fix file system permissions error
+- fix missing tensorflow .so files
+```
+# scopes needed are pub/sub, service control, service management, container registry,
+# stackdriver logging/trace/monitoring, storage
+# Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
+gcloud compute instances create-with-container jupyter-tensorflow-notebook \
+        --address=$IP_ADDRESS \
+        --zone=us-west1-b \
+        --accelerator=count=1,type=nvidia-tesla-v100 \
+        --can-ip-forward \
+        --container-image=$IMAGE_NAME \
+        --container-mount-disk=name=$DISK_NAME,mount-path=/$DISK_NAME,mode=rw \
+        --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=50GB \
+        --metadata enable-oslogin=TRUE \
+        --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME
+
+# SSH to instance
+# password is
+Take me to your river succulent
+export DISK_NAME=big-earth-data
+sudo chmod -R 777 /mnt/disks/gce-containers-mounts/gce-persistent-disks/$DISK_NAME
+docker run -p 8888:8888 \
+--user root -e NB_GROUP=users \
+--volume /mnt/disks/gce-containers-mounts/gce-persistent-disks/$DISK_NAME:/home/jovyan/work \
+us.gcr.io/big-earth-252219/jupyter_tensorflow_notebook \
+start-notebook.sh --NotebookApp.password='sha1:3f5b37350f9d:716aaf131f345da3352ded1f952e6b36bea8add8'
+
+
+
+# Stop and start
+gcloud compute instances stop jupyter-tensorflow-notebook
+gcloud compute instances start jupyter-tensorflow-notebook
+
+# Delete
+gcloud compute instances delete jupyter-tensorflow-notebook
 ```
 
 ## Train
@@ -113,7 +200,7 @@ export FILEDIR=data_science/model_trainer
 export IMAGE_NAME=$BASE_IMAGE_NAME/model_trainer
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile --build-arg filedir=$FILEDIR .
 docker push $IMAGE_NAME
-docker run -it --rm -p 8888:8888 --volume ~:/big_earth_data $IMAGE_NAME
+docker run -it --rm -p 8888:8888 --volume ~:/big-earth-data $IMAGE_NAME
 
 gcloud compute instances create-with-container model-trainer \
         --zone=us-west1-b \

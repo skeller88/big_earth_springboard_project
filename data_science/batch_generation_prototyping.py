@@ -1,6 +1,6 @@
 import os
 
-from big_earth_springboard_project.data_science.augmented_image_sequence import AugmentedImageSequence
+from data_science.augmented_image_sequence import AugmentedImageSequence
 
 print(os.listdir("."))
 
@@ -29,6 +29,43 @@ tf.random.set_seed(random_seed)
 test_names = ['name_{}'.format(num) for num in range(128)]
 
 import shutil
+
+# From npy files
+class AugmentedImageSequenceFromNpy(AugmentedImageSequence):
+    def __init__(self, x: np.array, y: np.array, batch_size, augmentations):
+        super().__init__(x=x, y=y, batch_size=batch_size, augmentations=augmentations)
+
+    def batch_loader(self, image_paths) -> np.array:
+        return np.array([np.load(image_path) for image_path in image_paths])
+
+metadata_file_path = f""
+npy_files_path = f"{root}/data/big_earth/npy_files"
+tiff_files_path = root + "/data/big_earth/BigEarthNet-V1.0"
+
+xtrain_npy = (npy_files_path + "/" + sample.iloc[:5000]['image_prefix'] + ".npy").values
+xtrain_tiff = (tiff_files_path + "/" + sample.iloc[:5000]['image_prefix'] + "/" +
+               sample.iloc[:5000]['image_prefix'] + "_B{}.tif").values
+
+ytrain = np.array([np.random.randn(1, 44) for _ in range(len(xtrain))])
+
+batch_size = 128
+np_sequence = AugmentedImageSequenceFromNpy(x=xtrain_npy, y=ytrain, batch_size=batch_size,
+                                  augmentations=AUGMENTATIONS_TRAIN)
+
+
+# From tiff on disk
+class AugmentedImageSequenceFromTiff(AugmentedImageSequence):
+    def __init__(self, x: np.array, y: np.array, batch_size, augmentations):
+        super().__init__(x=x, y=y, batch_size=batch_size, augmentations=augmentations)
+
+    def batch_loader(self, image_paths) -> np.array:
+        return np.array([self.load_image_bands_from_disk(image_path) for image_path in image_paths])
+
+    def load_image_bands_from_disk(self, base_filename):
+        bands = []
+        for band in ["02", "03", "04"]:
+            bands.append(np.array(Image.open(base_filename.format(band)), dtype=np.uint16))
+        return np.stack(bands, axis=-1)
 
 # Version 5 - write to zarr
 def load_image_bands_from_disk(base_filename):

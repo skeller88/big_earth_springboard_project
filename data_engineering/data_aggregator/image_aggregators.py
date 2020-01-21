@@ -18,4 +18,8 @@ def image_files_from_tif_to_npy(npy_files_path, image_dir, image_prefixes):
         stacked_arr = np.stack(bands, axis=-1)
         np.save(f"{npy_files_path}/{image_prefix}", stacked_arr)
 
-    parallelize_task(20, image_to_npy, image_prefixes)
+    def images_to_npy(image_prefixes):
+        for image_prefix in image_prefixes:
+            image_to_npy(image_prefix)
+
+    parallelize_task(num_workers=20, task=images_to_npy, iterator=image_prefixes)

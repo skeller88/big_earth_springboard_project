@@ -2,22 +2,23 @@ import random
 import time
 
 import numpy as np
-from keras.utils import Sequence
+from tensorflow.keras.utils import Sequence
 
 
 class AugmentedImageSequence(Sequence):
-    def __init__(self, x: np.array, y: np.array, batch_size, augmentations):
+    def __init__(self, x: np.array, y: np.array, batch_size, augmentations, has_verbose_logging):
         self.x = x
         self.y = y
         self.base_index = [idx for idx in range(len(x))]
         self.batch_size = batch_size
         self.augmentations = augmentations
+        self.has_verbose_logging = has_verbose_logging
 
     def __len__(self):
         return int(np.ceil(len(self.x) / self.batch_size))
 
     def __getitem__(self, batch_num):
-        if batch_num == 0:
+        if batch_num == 0 and self.has_verbose_logging:
             print('getting batch_num', batch_num)
             start = time.time()
 
@@ -33,7 +34,7 @@ class AugmentedImageSequence(Sequence):
         if self.y is not None:
             batch_x = np.stack([self.augmentations(image=x)["image"] for x in images], axis=0)
 
-            if batch_num == 0:
+            if batch_num == 0 and self.has_verbose_logging:
                 print('fetched batch_num', batch_num, 'in', time.time() - start, 'seconds')
 
             return batch_x, batch_y

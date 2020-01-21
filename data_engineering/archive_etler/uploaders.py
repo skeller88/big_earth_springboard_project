@@ -1,79 +1,12 @@
-import logging
 import os
-import sys
-import tarfile
+import os
 import time
 from concurrent.futures import Future, as_completed
 from concurrent.futures.thread import ThreadPoolExecutor
-from queue import Queue, Empty
+from queue import Empty
 from typing import List
 
-import imageio
 from google.api_core.retry import Retry
-from google.cloud import storage
-import numpy as np
-
-from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
-
-
-def main():
-    """
-    Downloads tarfile from $GCS_BUCKET_NAME/$GCS_TARFILE_BLOB_NAME, extracts tarfile to $DISK_PATH, and then
-    traverses files in $DISK_PATH/$UNCOMPRESSED_BLOB_PREFIX.
-    """
-    bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
-    tarfile_blob_name: str = os.environ.get("GCS_TARFILE_BLOB_NAME")
-    disk_path: str = os.environ.get("DISK_PATH")
-
-    gcs_client = storage.Client()
-    logger = logging.Logger("archive_etler", level=logging.INFO)
-    handler = logging.StreamHandler(sys.stdout)
-    logger.addHandler(handler)
-
-    tarfile_disk_path: str = disk_path + "/" + tarfile_blob_name
-
-    if os.environ.get("SHOULD_DOWNLOAD_TARFILE") == "True":
-        logger.info(f"Downloading BigEarth tarfile from bucket {bucket_name} and blob {tarfile_blob_name}, saving to "
-                    f"{tarfile_disk_path}")
-
-        print("disk_path contents before download", os.listdir(disk_path))
-        with GCSObjectStreamDownloader(client=gcs_client, bucket_name=bucket_name,
-                                       blob_name=tarfile_blob_name) as gcs_downloader:
-            print("tarfile_disk_path", tarfile_disk_path)
-            with open(tarfile_disk_path, 'wb') as fileobj:
-                chunk = gcs_downloader.read()
-                while chunk != b"":
-                    fileobj.write(chunk)
-                    chunk = gcs_downloader.read()
-
-        print("disk_path contents after download", os.listdir(disk_path))
-
-    extraction_path = tarfile_disk_path.replace(".gz", "").replace(".tar", "")
-    logger.info(f"extraction_path: {extraction_path}")
-
-    if os.environ.get("SHOULD_EXTRACT_TARFILE") == "True":
-        with tarfile.open(tarfile_disk_path, 'r') as fileobj:
-            fileobj.extractall(path=disk_path)
-        logger.info(f"tar extracted from {tarfile_disk_path} to {extraction_path}")
-
-    bucket = gcs_client.bucket(bucket_name)
-
-    # Don't use walk because filenames will have thousands of files. Iterate one by one instead
-    filepaths_to_upload = Queue()
-
-    stats = {
-        "num_files_uploaded": 0,
-        "num_folders_uploaded": 0,
-        "checkpoint": 1000
-    }
-
-
-def stack_image_bands_for_filename(base_filename):
-    bands = []
-    for band in ["02", "03", "04"]:
-        bands.append(imageio.core.asarray(imageio.imread(base_filename.format(band), 'TIFF')))
-    return np.stack(bands, axis=-1)
-
 
 
 def upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix, extraction_path):
@@ -145,7 +78,3 @@ def upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncom
                     logger.exception(task.exception())
 
     logger.info("Ending job")
-
-
-if __name__ == "__main__":
-    main()
