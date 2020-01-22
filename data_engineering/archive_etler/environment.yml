@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - imageio
   - python=3.6
   - pandas
   - pillow

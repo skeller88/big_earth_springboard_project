@@ -7,6 +7,7 @@ COPY data_science/jupyter_tensorflow_notebook/requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
 COPY ./data_science /app/data_science
+COPY ./data_engineering /app/data_engineering
 COPY ./.gcs /app/.gcs
 
 # RUN mkdir -p /host_mnt

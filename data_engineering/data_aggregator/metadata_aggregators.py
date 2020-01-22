@@ -6,11 +6,18 @@ from hashlib import sha256
 
 import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
+import numpy as np
 
 from data_engineering.data_aggregator.parallelize import parallelize_task
 
 
-def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, csv_files_path):
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+def metadata_files_from_json_to_csv(logger, num_workers, cloud_and_snow_csv_dir, json_dir, csv_files_path):
     if not os.path.exists(csv_files_path):
         os.mkdir(csv_files_path)
 
@@ -32,7 +39,7 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
             obj = json.load(fileobj)
             obj['labels'] = multi_replace(obj['labels'])
             obj['labels_sha256_hexdigest'] = sha256('-'.join(obj['labels']).encode('utf-8')).hexdigest()
-            obj['binarized_labels'] = json.dumps(mlb.transform([obj['labels']]))
+            obj['binarized_labels'] = json.dumps(mlb.transform([obj['labels']]), cls=NumpyEncoder)
             obj['image_prefix'] = json_metadata_file.rsplit('/')[-2]
             return obj
 
@@ -40,8 +47,8 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
         return [read_and_augment_metadata(json_metadata_file, mlb) for json_metadata_file in json_metadata_files]
 
     start = time.time()
-    glob_path = json_dir + '/**/*.json'
-    paths = glob.glob(glob_path)
+    paths = os.listdir(json_dir)
+    paths = [f"{json_dir}/{path}/{path}_labels_metadata.json" for path in paths]
     logger.info(f"Fetched {len(paths)} paths. in {time.time() - start} seconds.")
     start = time.time()
 
@@ -69,7 +76,7 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     # sanity check the output
     logger.info(f"Sea and ocean: {mlb.transform([['Sea and ocean']])}")
 
-    json_object_lists = parallelize_task(num_workers=20, iterator=paths, task=json_metadata_from_files, **dict(mlb=mlb))
+    json_object_lists = parallelize_task(num_workers=num_workers, iterator=paths, task=json_metadata_from_files, **dict(mlb=mlb))
     df = pd.concat([pd.DataFrame.from_records(json_object_list) for json_object_list in json_object_lists])
     # Check the dimensions
     logger.info(f"len(df): {len(df)}, len(paths): {len(paths)}")
@@ -79,13 +86,13 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
     snow = pd.read_csv(os.path.join(cloud_and_snow_csv_dir, 'patches_with_seasonal_snow.csv'), header=None, names=['image_prefix'])
     snow_col = 'has_snow'
     snow[snow_col] = 1
-    snow[f'{snow_col}_target'] = jdson.dumps(np.array([1]))
+    snow[f'{snow_col}_target'] = json.dumps(np.array([1]), cls=NumpyEncoder)
     snow = snow.set_index('image_prefix')
 
     clouds = pd.read_csv(os.path.join(cloud_and_snow_csv_dir, 'patches_with_cloud_and_shadow.csv'), header=None, names=['image_prefix'])
     cloud_col = 'has_cloud_and_shadow'
     clouds[cloud_col] = 1
-    clouds[f'{cloud_col}_target'] = json.dumps(np.array([1]))
+    clouds[f'{cloud_col}_target'] = json.dumps(np.array([1]), cls=NumpyEncoder)
     clouds = clouds.set_index('image_prefix')
 
     print(snow.head(3))
@@ -98,7 +105,7 @@ def metadata_files_from_json_to_csv(logger, cloud_and_snow_csv_dir, json_dir, cs
         df[column] = 0
 
     for column in [f"{snow_col}_target", f"{cloud_col}_target"]:
-        df[column] = json.dumps(np.array([0]))
+        df[column] = json.dumps(np.array([0]), cls=NumpyEncoder)
 
     df = df.set_index('image_prefix', drop=False)
     df.update(snow)

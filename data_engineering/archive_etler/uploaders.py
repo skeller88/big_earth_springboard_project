@@ -1,5 +1,4 @@
 import os
-import os
 import time
 from concurrent.futures import Future, as_completed
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -7,6 +6,40 @@ from queue import Empty
 from typing import List
 
 from google.api_core.retry import Retry
+
+from data_engineering.data_aggregator.parallelize import parallelize_task
+
+
+def upload_png_files(logger, num_workers, filepaths_to_upload, bucket, stats):
+    google_retry = Retry(deadline=480, maximum=240)
+
+    def on_google_retry_error(ex: Exception):
+        logger.error("Exception when uploading blob to google cloud.")
+        logger.exception(ex)
+
+    def google_cloud_uploader(filepaths):
+        start = time.time()
+
+        for filename in filepaths:
+            while True:
+                blob_name = os.path.join("png_files", filename.rsplit('/')[-1])
+                blob = bucket.blob(blob_name)
+                try:
+                    google_retry(blob.upload_from_filename(filename, content_type="image/png"),
+                                 on_error=on_google_retry_error)
+                except Exception as ex:
+                    logger.error(f"Uncaught exception when uploading blob to google cloud.")
+                    logger.exception(ex)
+                    raise ex
+                stats['num_files_uploaded'] += 1
+
+                if stats['num_files_uploaded'] > stats['checkpoint']:
+                    elapsed = (time.time() - start) / 60
+                    logger.info(
+                        f"Uploaded {stats['num_files_uploaded']} files in {elapsed} minutes, {stats['num_files_uploaded'] / elapsed} files per minute.")
+                    stats['checkpoint'] += 1000
+
+    parallelize_task(num_workers, filepaths_to_upload, google_cloud_uploader)
 
 
 def upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix, extraction_path):

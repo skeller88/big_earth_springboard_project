@@ -3,16 +3,14 @@ import os
 import sys
 import tarfile
 import time
-from concurrent.futures import Future, as_completed
-from concurrent.futures.thread import ThreadPoolExecutor
-from queue import Queue, Empty
-from typing import List
+from queue import Queue
 
-from google.api_core.retry import Retry
+import imageio
+import pandas as pd
 from google.cloud import storage
 
-from data_engineering.archive_etler.uploaders import upload_tiff_and_json_files
-from data_engineering.data_aggregator.image_aggregators import image_files_from_tif_to_npy
+from data_engineering.archive_etler.uploaders import upload_tiff_and_json_files, upload_png_files
+from data_engineering.data_aggregator.image_aggregators import image_files_from_tif_to_npy, image_files_from_tif_to_png
 from data_engineering.data_aggregator.metadata_aggregators import metadata_files_from_json_to_csv
 from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
 
@@ -23,11 +21,15 @@ def main():
     traverses files in $DISK_PATH/$UNCOMPRESSED_BLOB_PREFIX. If $SHOULD_UPLOAD_TIFF_AND_JSON_FILES,
     uploads tiff and json files to gcs.
     """
+    imageio.plugins.freeimage.download()
+
     global_start = time.time()
     bucket_name: str = os.environ.get("GCS_BUCKET_NAME")
     tarfile_blob_name: str = os.environ.get("GCS_TARFILE_BLOB_NAME")
     uncompressed_blob_prefix: str = os.environ.get("UNCOMPRESSED_BLOB_PREFIX")
     should_upload_tiff_and_json_files: bool = os.environ.get("SHOULD_UPLOAD_TIFF_AND_JSON_FILES") == "True"
+    should_aggregate_metadata: bool = os.environ.get("SHOULD_AGGREGATE_METADATA") == "True"
+    should_aggregate_images: bool = os.environ.get("SHOULD_AGGREGATE_IMAGES") == "True"
     disk_path: str = os.environ.get("DISK_PATH")
 
     gcs_client = storage.Client()
@@ -42,8 +44,9 @@ def main():
         logger.info(f"Downloading BigEarth tarfile from bucket {bucket_name} and blob {tarfile_blob_name}, saving to "
                     f"{tarfile_disk_path}")
 
-        for blob_name in ["patches_with_cloud_and_shadow.csv",  "patches_with_seasonal_snow.csv"]:
-            with GCSObjectStreamDownloader(client=gcs_client, bucket_name=bucket_name, blob_name=blob_name) as gcs_downloader:
+        for blob_name in ["patches_with_cloud_and_shadow.csv", "patches_with_seasonal_snow.csv"]:
+            with GCSObjectStreamDownloader(client=gcs_client, bucket_name=bucket_name,
+                                           blob_name=blob_name) as gcs_downloader:
                 with open(disk_path + "/" + blob_name, 'wb') as fileobj:
                     chunk = gcs_downloader.read()
                     while chunk != b"":
@@ -108,19 +111,43 @@ def main():
 
         upload_tiff_and_json_files(logger, filepaths_to_upload, bucket, stats, uncompressed_blob_prefix,
                                    extraction_path)
-    start = time.time()
-    metadata_df = metadata_files_from_json_to_csv(logger=logger, csv_files_path=disk_path + "/metadata",
-                                                  cloud_and_snow_csv_dir=disk_path, json_dir=extraction_path)
-    logger.info(f"Finished metadata aggregation in {(time.time() - start)} seconds.")
 
-    start = time.time()
+    num_workers = int(os.environ.get("NUM_WORKERS", 20))
+    metadata_path = disk_path + "/metadata"
+    if should_aggregate_metadata:
+        start = time.time()
+        
+        metadata_df = metadata_files_from_json_to_csv(logger=logger, num_workers=num_workers,
+                                                      csv_files_path=metadata_path,
+                                                      cloud_and_snow_csv_dir=disk_path, json_dir=extraction_path)
+        logger.info(f"Finished metadata aggregation in {(time.time() - start)} seconds.")
+    else:
+        metadata_df = pd.read_csv(metadata_path + '/metadata.csv')
 
-    logger.info(f"Starting image aggregation.")
-    image_files_from_tif_to_npy(npy_files_path=disk_path + "/npy_image_files", image_dir=extraction_path,
-                                image_prefixes=metadata_df['image_prefix'].values)
-    logger.info(f"Finished image aggregation in {(time.time() - start)} seconds.")
-    logger.info(f"Finished ETL in {(time.time() - global_start) / 60} minutes.")
+    if should_aggregate_images:
+        start = time.time()
+    
+        logger.info(f"Starting image aggregation.")
+        png_files_path = disk_path + "/png_image_files"
+        image_files_from_tif_to_png(num_workers=num_workers, png_files_path=png_files_path,
+                                    image_dir=extraction_path,
+                                    image_prefixes=metadata_df['image_prefix'].values)
+        filepaths_to_upload = [png_files_path + "/" + filename for filename in os.listdir(png_files_path)]
+        stats = {
+            "num_files_uploaded": 0,
+            "num_folders_uploaded": 0,
+            "checkpoint": 1000
+        }
 
+        bucket = gcs_client.bucket(bucket_name)
+        upload_png_files(logger=logger, num_workers=num_workers, filepaths_to_upload=filepaths_to_upload, bucket=bucket,
+                         stats=stats)
+        # image_files_from_tif_to_npy(num_workers=num_workers, npy_files_path=disk_path + "/npy_image_files", image_dir=extraction_path,
+        #                             image_prefixes=metadata_df['image_prefix'].values)
+        logger.info(f"Finished image aggregation in {(time.time() - start)} seconds.")
+
+
+        logger.info(f"Finished ETL in {(time.time() - global_start) / 60} minutes.")
 
 
 if __name__ == "__main__":
