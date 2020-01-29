@@ -42,8 +42,8 @@ export FILEDIR=data_engineering/archive_etler
 export IMAGE_NAME=$BASE_IMAGE_NAME/archive_etler
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile .
 docker push $IMAGE_NAME
-docker run -it --rm -p 8888:8888 \
---volume ~:/big_earth_data \
+docker run -it --rm -p 8889:8889 \
+--volume ~:/big-earth-data \
 --env-file $FILEDIR/env.list $IMAGE_NAME
 
 ## Run on google cloud
@@ -51,14 +51,18 @@ docker run -it --rm -p 8888:8888 \
 # First time
 gcloud compute instances create-with-container archive-etler \
         --zone=us-west1-b \
+        --container-env-file=$FILEDIR/env.list \
         --container-image=$IMAGE_NAME \
         --container-mount-disk=name=big-earth-data,mount-path=/big-earth-data,mode=rw \
-        --container-env-file=$FILEDIR/env.list \
+        --container-restart-policy=never \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
         --metadata-from-file=startup-script=startup_script.sh \
         --boot-disk-size=10GB \
         --create-disk=name=big-earth-data,auto-delete=no,mode=rw,size=200GB,type=pd-ssd,device-name=big-earth-data
+
+# Subsequent times, attach disk
+`--disk=name=big-earth-data,auto-delete=no,mode=rw,device-name=big-earth-data`
 
 # start and stop
 gcloud compute instances stop archive-etler
@@ -72,20 +76,15 @@ gcloud compute instances stop archive-etler
 gcloud compute instances detach-disk archive-etler --disk=big-earth-data
 
 # Reattach disk
-gcloud compute instances attach-disk archive-etler --disk=big-earth-data
-
-# Subsequent times
-gcloud compute instances create-with-container archive-etler \
-        --zone=us-west1-b \
-        --container-image=$IMAGE_NAME \
-        --container-mount-disk=name=big-earth-data,mountf-path=/big-earth-data,mode=rw \
-        --container-env-file=$FILEDIR/env.list \
-        --maintenance-policy=TERMINATE \
-        --machine-type=n1-standard-4 \
-        --boot-disk-size=10GB \
-        --disk=name=big-earth-data,auto-delete=no,mode=rw,device-name=big-earth-data
-
+gcloud compute instances attach-disk archive-etler \
+    --disk=big-earth-data \
+    --device-name=big-earth-data \
+    --mode=rw \
+    --zone=us-west1-b
 ```
+
+gsutil cp -R gs://big_earth/png_image_files gs://big_earth_us_central_1
+
 
 # Model training
 ## Prototype with Jupyter notebook
@@ -110,19 +109,19 @@ export DISK_NAME=big-earth-data
 # scopes needed are pub/sub, service control, service management, container registry,
 # stackdriver logging/trace/monitoring, storage
 # Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
-$IMAGE_NAME=gcr.io/deeplearning-platform-release/tf-gpu
-gcloud compute instances create-with-container jupyter-tensorflow-notebook \
-        --address=$IP_ADDRESS \
+export IMAGE_FAMILY="tf2-latest-gpu"
+gcloud compute instances create jupyter-tensorflow-notebook \
         --zone=us-west1-b \
         --accelerator=count=1,type=nvidia-tesla-v100 \
         --can-ip-forward \
-        --container-image=$IMAGE_NAME \
-        --container-mount-disk=name=$DISK_NAME,mount-path=/$DISK_NAME,mode=rw \
+        --image-family=$IMAGE_FAMILY \
+        --image-project=deeplearning-platform-release \
         --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
         --boot-disk-size=50GB \
-        --metadata enable-oslogin=TRUE \
+        --metadata=enable-oslogin=TRUE,install-nvidia-driver=True \
+        --metadata-from-file=startup-script=$FILEDIR/startup_script.sh \
         --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME
 
 # SSH to instance
@@ -136,12 +135,16 @@ sudo useradd $JUPYTER_USER -g users
 sudo mkdir $JUPYTER_USER_DIR
 sudo chwon $JUPYTER_USER:users $JUPYTER_USER_DIR
 docker run -d -p 8888:8888 \
---user root -e NB_USER=$JUPYTER_USER -e NB_GROUP=users \
 --volume /mnt/disks/gce-containers-mounts/gce-persistent-disks/$DISK_NAME:/home/jovyan/work \
 us.gcr.io/big-earth-252219/jupyter_tensorflow_notebook \
-start-notebook.sh --NotebookApp.password='sha1:3f5b37350f9d:716aaf131f345da3352ded1f952e6b36bea8add8'
+start-notebook.sh --NotebookApp.password='sha1:53b6a295837d:d096b7b1797ebe5bb5f5ecc355659d760281e343'
 
+# --user root -e NB_USER=$JUPYTER_USER -e NB_GROUP=users \
+# time to make party
 
+# if the disk is not found, confirm the disk is attached to the instance
+lsblk
+sudo mount /dev/sdb /mnt/disks/gce-containers-mounts/gce-persistent-disks/big-earth-data
 
 # Stop and start
 gcloud compute instances stop jupyter-tensorflow-notebook

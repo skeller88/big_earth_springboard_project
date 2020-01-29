@@ -36,7 +36,7 @@ def image_files_from_tif_to_png(num_workers, png_files_path, image_dir, image_pr
             dtype=np.uint16) for band in ["02", "03", "04"]]
 
         stacked_arr = np.stack(bands, axis=-1)
-        imageio.imwrite(im=stacked_arr, uri=f"{png_files_path}/{image_prefix}", format='PNG-FI')
+        imageio.imwrite(im=stacked_arr, uri=f"{png_files_path}/{image_prefix}.png", format='PNG-FI')
 
     def images_to_png(image_prefixes):
         for image_prefix in image_prefixes:

@@ -1,9 +1,8 @@
 import dask
 import dask.array as da
+import numpy as np
 from distributed import Client
 
-import numpy as np
-import time
 
 def read_image():
     return np.random.randint(0, 4000, (120, 120), dtype=np.uint16)

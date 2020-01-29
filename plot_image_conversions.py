@@ -11,7 +11,34 @@
 # import cv2
 # import numpy as np
 # from PIL import Image
-# from matplotlib import pyplot as plt
+import os
+from matplotlib import pyplot as plt
+import imageio
+
+imageio.plugins.freeimage.download()
+
+png_image_dir = "/Users/shanekeller/data/big_earth/png_image_files"
+imgs = [imageio.imread(os.path.join(png_image_dir, filename), format='PNG-FI') for filename in os.listdir(png_image_dir)[:6]]
+
+file = png_image_dir + "/" + "S2B_MSIL2A_20180204T094159_3_22.png"
+
+file = "/Users/shanekeller/data/big_earth/BigEarthNet-v1.0/S2B_MSIL2A_20180502T093039_63_58/S2B_MSIL2A_20180502T093039_63_58_B02.tif"
+# img = imageio.imread(file, format='PNG-FI')
+img = imageio.imread(file)
+plt.imshow(img)
+# fig = plt.figure(figsize=(15, 15))
+# rows = 2
+# columns = 3
+# ax = []
+# for i in range(1, columns * rows):
+#     if i <= len(imgs):
+#         ax.append(fig.add_subplot(rows, columns, i + 1))
+#         # ax[-1].set_title(imgs[i - 1])
+#         plt.imshow(imgs[i - 1])
+
+plt.show()
+
+img.show()
 
 #
 # def tiff_to_jpg(base_filename, optical_max_value: int):

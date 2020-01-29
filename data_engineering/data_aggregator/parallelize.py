@@ -5,6 +5,7 @@ from typing import List
 
 def parallelize_task(num_workers, iterator, task, **task_kwargs):
     chunk_size = len(iterator) // num_workers
+    print("chunk_size", chunk_size)
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         tasks: List[Future] = []
         start_index = 0

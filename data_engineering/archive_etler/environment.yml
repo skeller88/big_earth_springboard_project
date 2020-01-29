@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - dask
   - imageio
   - python=3.6
   - pandas
@@ -13,3 +14,4 @@ dependencies:
   - pip:
     - google-cloud-storage
     - requests
+    - rasterio

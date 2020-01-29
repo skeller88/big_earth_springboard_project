@@ -8,6 +8,7 @@ RUN echo "source activate app-env" > ~/.bashrc
 ENV PATH /opt/conda/envs/app-env/bin:$PATH
 
 COPY data_engineering /app/data_engineering
+COPY splits /app/splits
 COPY ./.gcs /app/.gcs
 
 # Allow python to discover modules
