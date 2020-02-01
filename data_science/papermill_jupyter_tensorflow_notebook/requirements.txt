@@ -1,5 +1,6 @@
 albumentations~=0.4.3
 google-cloud-storage~=1.19.0
+papermill~=1.2.1
 rasterio
 requests~=2.22.0
 scipy ~= 1.4.1

@@ -126,7 +126,6 @@ gcloud compute instances create jupyter-tensorflow-notebook \
 
 # SSH to instance
 # password is
-Take me to your river succulent
 export DISK_NAME=big-earth-data
 export JUPYTER_USER=jovyan
 export JUPYTER_USER_DIR = /mnt/disks/gce-containers-mounts/gce-persistent-disks/$DISK_NAME/$JUPYTER_USER
@@ -152,6 +151,33 @@ gcloud compute instances start jupyter-tensorflow-notebook
 
 # Delete
 gcloud compute instances delete jupyter-tensorflow-notebook
+```
+
+## Create GCP instance from Google image family to run Papermill training notebook
+```
+export FILEDIR=data_science/papermill_jupyter_tensorflow_notebook
+export IMAGE_NAME=$BASE_IMAGE_NAME/papermill_jupyter_tensorflow_notebook
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
+docker push $IMAGE_NAME
+docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
+
+# scopes needed are pub/sub, service control, service management, container registry,
+# stackdriver logging/trace/monitoring, storage
+# Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
+export IMAGE_FAMILY="tf2-latest-gpu"
+gcloud compute instances create papermill-jupyter-tensorflow-notebook \
+        --zone=us-west1-b \
+        --accelerator=count=1,type=nvidia-tesla-v100 \
+        --can-ip-forward \
+        --image-family=$IMAGE_FAMILY \
+        --image-project=deeplearning-platform-release \
+        --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-4 \
+        --boot-disk-size=50GB \
+        --metadata=enable-oslogin=TRUE,install-nvidia-driver=True \
+        --metadata-from-file=startup-script=$FILEDIR/startup_script.sh \
+        --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME
 ```
 
 ## Create GCP instance from Docker image

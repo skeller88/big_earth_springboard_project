@@ -59,3 +59,28 @@ class AugmentedImageSequence(Sequence):
 
         if self.y is not None:
             self.y = self.y[shuffled_index]
+
+    def make_one_shot_iterator(self):
+        for batch_num in range(len(self)):
+            batch_x, batch_y = self[batch_num]
+            yield batch_x, batch_y
+
+    def get_predictions(self, model, threshold=.5):
+        pred_y_batches = []
+        actual_y_batches = []
+        for batch_x, batch_y in self.make_one_shot_iterator():
+            pred_y_batches.append(model.predict(batch_x))
+            actual_y_batches.append(batch_y)
+
+        pred_y = []
+        for pred_y_batch in pred_y_batches:
+            for pred in pred_y_batch:
+                pred = 0 if pred < threshold else 1
+                pred_y.append(pred)
+
+        actual_y = []
+        for actual_y_batch in actual_y_batches:
+            for actual in actual_y_batch:
+                actual_y.append(actual)
+
+        return actual_y, pred_y
