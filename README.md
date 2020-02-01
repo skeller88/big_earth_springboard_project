@@ -92,8 +92,8 @@ gsutil cp -R gs://big_earth/png_image_files gs://big_earth_us_central_1
 export FILEDIR=data_science/jupyter_tensorflow_notebook
 export IMAGE_NAME=$BASE_IMAGE_NAME/jupyter_tensorflow_notebook
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
-docker push $IMAGE_NAME
 docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
+docker push $IMAGE_NAME
 
 gcloud compute addresses create jupyter-tensorflow-notebook --region us-west1
 gcloud compute addresses list
@@ -155,16 +155,17 @@ gcloud compute instances delete jupyter-tensorflow-notebook
 
 ## Create GCP instance from Google image family to run Papermill training notebook
 ```
+export DISK_NAME=big-earth-data
 export FILEDIR=data_science/papermill_jupyter_tensorflow_notebook
 export IMAGE_NAME=$BASE_IMAGE_NAME/papermill_jupyter_tensorflow_notebook
+export IMAGE_FAMILY="tf2-2-1-cu100-20200109"
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
-docker push $IMAGE_NAME
 docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
+docker push $IMAGE_NAME
 
 # scopes needed are pub/sub, service control, service management, container registry,
 # stackdriver logging/trace/monitoring, storage
 # Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
-export IMAGE_FAMILY="tf2-latest-gpu"
 gcloud compute instances create papermill-jupyter-tensorflow-notebook \
         --zone=us-west1-b \
         --accelerator=count=1,type=nvidia-tesla-v100 \
@@ -179,6 +180,8 @@ gcloud compute instances create papermill-jupyter-tensorflow-notebook \
         --metadata-from-file=startup-script=$FILEDIR/startup_script.sh \
         --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME
 ```
+
+gcloud compute instances delete papermill-jupyter-tensorflow-notebook
 
 ## Create GCP instance from Docker image
 TODO

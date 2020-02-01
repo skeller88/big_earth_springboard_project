@@ -2,8 +2,8 @@ import json
 import time
 import warnings
 
+import numpy as np
 from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.python.lib.io import file_io
 
 
 class ModelCheckpointGCS(ModelCheckpoint):
@@ -12,8 +12,8 @@ class ModelCheckpointGCS(ModelCheckpoint):
     model and training metadata to disk and gcs. Assumes GOOGLE_APPLICATION_CREDENTIALS has been set.
     """
 
-    def __init__(self, var, filepath, gcs_filepath, gcs_bucket, model_metadata, monitor='val_loss', verbose=0,
-                 mode='auto', period=1):
+    def __init__(self, filepath, gcs_filepath, gcs_bucket, model_metadata, monitor='val_loss', verbose=0, mode='auto',
+                 period=1):
         model_filepath = f"{filepath}.h5"
         super(ModelCheckpointGCS, self).__init__(filepath=model_filepath, monitor=monitor, verbose=verbose,
                                                  save_best_only=True, save_weights_only=False,
@@ -25,7 +25,6 @@ class ModelCheckpointGCS(ModelCheckpoint):
         self.gcs_model_metadata_filepath = f"{gcs_filepath}_metadata.json"
         self.model_metadata = model_metadata
         self.train_start_time = time.time()
-        self.var = var
 
     def on_epoch_end(self, epoch, logs=None):
         """
