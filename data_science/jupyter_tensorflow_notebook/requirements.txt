@@ -1,6 +1,0 @@
-albumentations~=0.4.3
-google-cloud-storage~=1.19.0
-rasterio
-requests~=2.22.0
-scipy ~= 1.4.1
-tensorflow-addons~=0.7.0

@@ -5,3 +5,4 @@ docker ps -aq --no-trun -f status=exited | xargs docker rm
 
 # remove dangling images
 docker rmi -f $(docker images --filter "dangling=true" -q --no-trunc)
+docker system prune

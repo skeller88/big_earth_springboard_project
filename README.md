@@ -67,7 +67,7 @@ gcloud compute instances create-with-container archive-etler \
 # start and stop
 gcloud compute instances stop archive-etler
 gcloud compute instances start archive-etler
-
+NotebookApp.token='YOUR_PASSWORD'
 # ssh to instance and unmount disk
 sudo umount /dev/disk/by-id/google-big-earth-data
 
@@ -109,13 +109,17 @@ export DISK_NAME=big-earth-data
 # scopes needed are pub/sub, service control, service management, container registry,
 # stackdriver logging/trace/monitoring, storage
 # Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
-export IMAGE_FAMILY="tf2-latest-gpu"
+export DISK_NAME=big-earth-data
+export IMAGE_PROJECT=ubuntu-os-cloud
+# export IMAGE_PROJECT=deeplearning-platform-release
+export IMAGE_FAMILY=ubuntu-1804-lts
+# export IMAGE_FAMILY=tf2-2-1-cu100
 gcloud compute instances create jupyter-tensorflow-notebook \
         --zone=us-west1-b \
         --accelerator=count=1,type=nvidia-tesla-v100 \
         --can-ip-forward \
         --image-family=$IMAGE_FAMILY \
-        --image-project=deeplearning-platform-release \
+        --image-project=$IMAGE_PROJECT \
         --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
@@ -158,9 +162,12 @@ gcloud compute instances delete jupyter-tensorflow-notebook
 export DISK_NAME=big-earth-data
 export FILEDIR=data_science/papermill_jupyter_tensorflow_notebook
 export IMAGE_NAME=$BASE_IMAGE_NAME/papermill_jupyter_tensorflow_notebook
-export IMAGE_FAMILY="tf2-2-1-cu100-20200109"
+export IMAGE_PROJECT=ubuntu-os-cloud
+# export IMAGE_PROJECT=deeplearning-platform-release
+export IMAGE_FAMILY=ubuntu-1804-lts
+# export IMAGE_FAMILY=tf2-2-1-cu100
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
-docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
+# docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
 docker push $IMAGE_NAME
 
 # scopes needed are pub/sub, service control, service management, container registry,
@@ -171,7 +178,7 @@ gcloud compute instances create papermill-jupyter-tensorflow-notebook \
         --accelerator=count=1,type=nvidia-tesla-v100 \
         --can-ip-forward \
         --image-family=$IMAGE_FAMILY \
-        --image-project=deeplearning-platform-release \
+        --image-project=$IMAGE_PROJECT \
         --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
         --maintenance-policy=TERMINATE \
         --machine-type=n1-standard-4 \
