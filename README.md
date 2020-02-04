@@ -130,18 +130,6 @@ gcloud compute instances create jupyter-tensorflow-notebook \
         --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME \
         --tags http-server
 
-# Allow discovery of CUDA driver and toolkit. Assumes installation of CUDA 10.0 on
-# GCP instance.
-# Directions from https://github.com/kaust-vislab/tensorflow-gpu-data-science-project
-ENV CUDA_HOME /usr/local/cuda-10.0
-ENV PATH $CUDA_HOME/bin:$PATH
-ENV LD_LIBRARY_PATH $CUDA_HOME/lib64:$LD_LIBRARY_PATH
-
-# In notebook
-os.environ['CUDA_HOME'] = '/usr/local/cuda-10.0'
-os.environ['PATH'] = $CUDA_HOME/bin:$PATH
-os.environ['LD_LIBRARY_PATH'] = $CUDA_HOME/lib64:$LD_LIBRARY_PATH
-
 # SSH to instance
 # password is
 export DISK_NAME=big-earth-data
