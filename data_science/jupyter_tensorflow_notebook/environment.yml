@@ -1,4 +1,4 @@
-name: app-env
+name: null
 channels:
   - conda-forge
   - defaults
@@ -11,9 +11,9 @@ dependencies:
   - pip
   - numpy
   - scikit-learn
-  - tensorflow-gpu=2.0.0
   - pip:
     - albumentations
     - google-cloud-storage
     - requests
     - rasterio
+    - tensorflow-gpu==2.0.*

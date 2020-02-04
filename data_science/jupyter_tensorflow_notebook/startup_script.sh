@@ -2,20 +2,21 @@
 
 # modified https://www.tensorflow.org/install/gpu
 # cross checked with https://cloud.google.com/compute/docs/gpus/install-drivers-gpu
+# GCP Liniux instances require NVIDIA driver >= 410.79
 
 # install driver for Ubuntu 16.04
-export UBUNTU_OS=1604
-export CUDA_REPO=cuda-repo-ubuntu1604_10.0.130-1_amd64.deb
- install driver for Ubuntu 18.04 LTS
-export UBUNTU_OS=1804
-#export CUDA_REPO=cuda-repo-ubuntu1804_10.1.105-1_amd64.deb
-export CUDA_REPO=cuda-repo-ubuntu1804_10.0.130-1_amd64.deb
-wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu$UBUNTU_OS/x86_64/$CUDA_REPO
-
-sudo dpkg -i $CUDA_REPO
-sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu$UBUNTU_OS/x86_64/7fa2af80.pub
-sudo apt-get update -y
-sudo apt-get install cuda
+#export UBUNTU_OS=1604
+#export CUDA_REPO=cuda-repo-ubuntu1604_10.0.130-1_amd64.deb
+# install driver for Ubuntu 18.04 LTS
+#export UBUNTU_OS=1804
+##export CUDA_REPO=cuda-repo-ubuntu1804_10.1.105-1_amd64.deb
+#export CUDA_REPO=cuda-repo-ubuntu1804_10.0.130-1_amd64.deb
+#wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu$UBUNTU_OS/x86_64/$CUDA_REPO
+#
+#sudo dpkg -i $CUDA_REPO
+#sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu$UBUNTU_OS/x86_64/7fa2af80.pub
+#sudo apt-get update -y
+#sudo apt-get install cuda -y
 
 # Unix team maintains a repo of graphics drivers
 # https://askubuntu.com/questions/1054954/how-to-install-nvidia-driver-in-ubuntu-18-04
@@ -27,8 +28,6 @@ sudo apt-get install cuda
 ## https://docs.nvidia.com/deploy/cuda-compatibility/index.html#binary-compatibility__table-toolkit-driver
 #sudo apt-get install --no-install-recommends -y nvidia-driver-440
 
-
-
 # Install nvidia-docker
 distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
 curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
@@ -36,6 +35,7 @@ curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.li
 
 sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
 sudo systemctl restart docker
+echo "NVIDIA Docker installed"
 
 # Check the driver until installed
 while ! [[ -x "$(command -v nvidia-smi)" ]];
@@ -47,21 +47,19 @@ echo "nvidia-smi is installed"
 
 gcloud auth configure-docker
 echo "Docker run with GPUs"
-
 # Wait until disk is mounted
 export MOUNTPOINT=/mnt/disks/gce-containers-mounts/gce-persistent-disks/big-earth-data
+sudo mkdir -p $MOUNTPOINT
 while [[ "$(lsblk -o MOUNTPOINT -nr /dev/sdb)" != $MOUNTPOINT ]]
 do
   echo "waiting for disk to be attached to $MOUNTPOINT"
   sleep 5s
   sudo mount /dev/sdb $MOUNTPOINT
 done
-echo "Mounted disk"
+echo "Mounted disk at $MOUNTPOINT"
 
 docker run -d --gpus all --log-driver=gcplogs \
 -p 8888:8888 \
 --volume $MOUNTPOINT:/home/jovyan/work \
-us.gcr.io/big-earth-252219/jupyter_tensorflow_notebook \
-start-notebook.sh --NotebookApp.password='sha1:53b6a295837d:d096b7b1797ebe5bb5f5ecc355659d760281e343'
-
+us.gcr.io/big-earth-252219/jupyter_tensorflow_notebook
 echo "started notebook"
