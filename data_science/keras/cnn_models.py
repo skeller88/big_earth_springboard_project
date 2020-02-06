@@ -15,14 +15,15 @@ def basic_cnn_model(img_shape, n_classes):
     layer to the output of last convolutional layer. In all convolution operations, zero padding was used. We also applied
     max-pooling between layers.
     """
+    kernel_initializer = 'he_uniform'
     img_inputs = Input(shape=img_shape)
-    conv_1 = Conv2D(32, (5, 5), activation='relu')(img_inputs)
+    conv_1 = Conv2D(32, (5, 5), activation='relu', kernel_initializer=kernel_initializer, use_bias=False)(img_inputs)
     maxpool_1 = MaxPooling2D((2, 2))(conv_1)
-    conv_2 = Conv2D(32, (5, 5), activation='relu')(maxpool_1)
+    conv_2 = Conv2D(32, (5, 5), activation='relu', kernel_initializer=kernel_initializer, use_bias=False)(maxpool_1)
     maxpool_2 = MaxPooling2D((2, 2))(conv_2)
-    conv_3 = Conv2D(64, (3, 3), activation='relu')(maxpool_2)
+    conv_3 = Conv2D(64, (3, 3), activation='relu', kernel_initializer=kernel_initializer, use_bias=False)(maxpool_2)
     flatten = Flatten()(conv_3)
-    dense_1 = Dense(64, activation='relu')(flatten)
+    dense_1 = Dense(64, activation='relu', kernel_initializer=kernel_initializer, use_bias=False)(flatten)
     output = Dense(n_classes, activation='sigmoid')(dense_1)
 
     return Model(inputs=img_inputs, outputs=output)

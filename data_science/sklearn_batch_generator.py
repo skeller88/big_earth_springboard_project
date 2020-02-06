@@ -5,7 +5,8 @@ import numpy as np
 
 
 class SklearnBatchGenerator:
-    def __init__(self, x: np.array, y: np.array, batch_size, augmentations, band_stats, has_verbose_logging=False):
+    def __init__(self, x: np.array, y: np.array, batch_size, augmentations, band_stats, has_verbose_logging=False,
+                 should_test_time_augment=False):
         self.x = x
         self.y = y
         self.base_index = [idx for idx in range(len(x))]
@@ -14,29 +15,19 @@ class SklearnBatchGenerator:
         self.has_verbose_logging = has_verbose_logging
         self.means = band_stats['mean'].values
         self.stds = band_stats['std'].values
+        self.should_test_time_augment = should_test_time_augment
 
     def __len__(self):
         return int(np.ceil(len(self.x) / self.batch_size))
 
     def __getitem__(self, batch_num):
-        images = self.batch_loader(self.x)
-        batch_x = np.stack([self.augmentations(image=x)["image"].flatten() for x in images], axis=0)
-
-        if batch_num == 0 and self.has_verbose_logging:
-            print('getting batch_num', batch_num)
-            start = time.time()
-
-        batch_x = self.x[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
+        img_names = self.x[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
 
         if self.y is not None:
             batch_y = np.ravel(self.y[batch_num * self.batch_size:(batch_num + 1) * self.batch_size])
 
-        start = time.time()
-        images = self.batch_loader(batch_x)
-
-        # training
-        if self.y is not None:
-            batch_x = np.stack([self.augmentations(image=x)["image"].flatten() for x in images], axis=0)
+            start = time.time()
+            batch_x = self.batch_loader(img_names, self.augmentations is not None)
 
             if batch_num == 0 and self.has_verbose_logging:
                 print('fetched batch_num', batch_num, 'in', time.time() - start, 'seconds')
@@ -44,17 +35,20 @@ class SklearnBatchGenerator:
             return batch_x, batch_y
         # test (inference only)
         else:
-            return np.array(images)
+            return self.batch_loader(img_names, self.should_test_time_augment)
 
     def make_one_shot_iterator(self):
         for batch_num in range(len(self)):
             batch_x, batch_y = self[batch_num]
             yield batch_x, batch_y
 
-    def batch_loader(self, image_paths) -> np.array:
+    def batch_loader(self, image_paths, should_augment) -> np.array:
         imgs = np.array([np.load(image_path) for image_path in image_paths])
         normalized_imgs = (imgs - self.means) / self.stds
-        return normalized_imgs
+
+        if should_augment:
+            return np.stack([self.augmentations(image=x)["image"].flatten() for x in normalized_imgs], axis=0)
+        return np.array([x.flatten() for x in normalized_imgs])
 
     def on_epoch_end(self):
         # Can't figure out how to pass in the epoch variable

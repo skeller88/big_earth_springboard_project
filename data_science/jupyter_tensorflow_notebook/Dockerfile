@@ -71,4 +71,5 @@ ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/local/cuda/extras/CUPTI/lib64
 RUN echo $LD_LIBRARY_PATH
 
 CMD ["bash", "-c", "jupyter notebook --ip 0.0.0.0 --allow-root \
+--notebook-dir /home/jovyan/work \
 --NotebookApp.password='sha1:53b6a295837d:d096b7b1797ebe5bb5f5ecc355659d760281e343'"]

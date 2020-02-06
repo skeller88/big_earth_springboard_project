@@ -1,4 +1,3 @@
-import random
 import time
 
 import numpy as np
@@ -6,33 +5,27 @@ from tensorflow.keras.utils import Sequence
 
 
 class AugmentedImageSequence(Sequence):
-    def __init__(self, x: np.array, y: np.array, batch_size, augmentations, has_verbose_logging):
+    def __init__(self, x: np.array, y: np.array, batch_size, augmentations, has_verbose_logging=False,
+                 should_test_time_augment=False):
         self.x = x
         self.y = y
         self.base_index = [idx for idx in range(len(x))]
         self.batch_size = batch_size
         self.augmentations = augmentations
         self.has_verbose_logging = has_verbose_logging
+        self.should_test_time_augment = should_test_time_augment
 
     def __len__(self):
         return int(np.ceil(len(self.x) / self.batch_size))
 
     def __getitem__(self, batch_num):
-        if batch_num == 0 and self.has_verbose_logging:
-            print('getting batch_num', batch_num)
+        img_names = self.x[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
+
+        if self.y is not None:
+            batch_y = np.ravel(self.y[batch_num * self.batch_size:(batch_num + 1) * self.batch_size])
+
             start = time.time()
-
-        batch_x = self.x[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
-
-        if self.y is not None:
-            batch_y = self.y[batch_num * self.batch_size:(batch_num + 1) * self.batch_size]
-
-        start = time.time()
-        images = self.batch_loader(batch_x)
-
-        # training
-        if self.y is not None:
-            batch_x = np.stack([self.augmentations(image=x)["image"] for x in images], axis=0)
+            batch_x = self.batch_loader(img_names, self.augmentations is not None)
 
             if batch_num == 0 and self.has_verbose_logging:
                 print('fetched batch_num', batch_num, 'in', time.time() - start, 'seconds')
@@ -40,9 +33,14 @@ class AugmentedImageSequence(Sequence):
             return batch_x, batch_y
         # test (inference only)
         else:
-            return np.array(images)
+            return self.batch_loader(img_names, self.should_test_time_augment)
 
-    def batch_loader(self, image_paths) -> np.array:
+    def make_one_shot_iterator(self):
+        for batch_num in range(len(self)):
+            batch_x, batch_y = self[batch_num]
+            yield batch_x, batch_y
+
+    def batch_loader(self, image_paths, should_augment) -> np.array:
         raise NotImplementedError()
 
     def on_epoch_end(self):
@@ -60,11 +58,6 @@ class AugmentedImageSequence(Sequence):
         if self.y is not None:
             self.y = self.y[shuffled_index]
 
-    def make_one_shot_iterator(self):
-        for batch_num in range(len(self)):
-            batch_x, batch_y = self[batch_num]
-            yield batch_x, batch_y
-
     def get_predictions(self, model, threshold=.5):
         pred_y_batches = []
         actual_y_batches = []
@@ -72,9 +65,11 @@ class AugmentedImageSequence(Sequence):
             pred_y_batches.append(model.predict(batch_x))
             actual_y_batches.append(batch_y)
 
+        pred_y_prob = []
         pred_y = []
         for pred_y_batch in pred_y_batches:
             for pred in pred_y_batch:
+                pred_y_prob.append(pred)
                 pred = 0 if pred < threshold else 1
                 pred_y.append(pred)
 
@@ -83,4 +78,4 @@ class AugmentedImageSequence(Sequence):
             for actual in actual_y_batch:
                 actual_y.append(actual)
 
-        return actual_y, pred_y
+        return np.array(actual_y), np.array(pred_y), np.array(pred_y_prob)
