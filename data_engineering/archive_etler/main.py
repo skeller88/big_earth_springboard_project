@@ -11,7 +11,7 @@ from google.cloud import storage
 
 from data_engineering.archive_etler.uploaders import upload_tiff_and_json_files, upload_png_files
 from data_engineering.dask_image_stats_collector import stats_for_numpy_images, stats_for_tiff_images
-from data_engineering.data_aggregator.image_aggregators import image_files_from_tif_to_npy, image_files_from_tif_to_png
+from data_engineering.data_aggregator.image_aggregators import image_files_from_tif_to_npy, image_files_from_tif_to_normalized_png
 from data_engineering.data_aggregator.metadata_aggregators import metadata_files_from_json_to_csv
 from data_engineering.gcs_stream_downloader import GCSObjectStreamDownloader
 
@@ -159,9 +159,10 @@ def main():
     if should_aggregate_images_to_png:
         start = time.time()
         logger.info(f"Starting png image aggregation.")
-        image_files_from_tif_to_png(num_workers=num_workers, png_files_path=png_files_path,
-                                    image_dir=extraction_path,
-                                    image_prefixes=metadata_df['image_prefix'].values)
+        image_files_from_tif_to_normalized_png(num_workers=num_workers, png_files_path=png_files_path,
+                                               image_dir=extraction_path,
+                                               image_prefixes=metadata_df['image_prefix'].values,
+                                               image_stats=stats)
         logger.info(f"Finished png image aggregation in {(time.time() - start) / 60} minutes.")
 
     if should_upload_png_files:

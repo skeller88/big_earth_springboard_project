@@ -29,7 +29,7 @@ def basic_cnn_model(img_shape, n_classes):
     return Model(inputs=img_inputs, outputs=output)
 
 
-def basic_cnn_model_with_best_practices(img_shape, n_classes):
+def basic_cnn_model_with_regularization(img_shape, n_classes):
     """
     From https://arxiv.org/pdf/1902.06148.pdf
 

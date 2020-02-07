@@ -1,6 +1,7 @@
 import numpy as np
 
 from data_science.augmented_image_sequence import AugmentedImageSequence
+import tensorflow
 
 
 class AugmentedImageSequenceFromNpy(AugmentedImageSequence):
@@ -18,11 +19,11 @@ class AugmentedImageSequenceFromNpy(AugmentedImageSequence):
         return np.array([x for x in normalized_imgs])
 
 
-class ImageDataset(tf.data.Dataset):
+class ImageDataset(tensorflow.data.Dataset):
     def __new__(cls, image_paths, y, augmentations, band_stats):
-        return tf.data.Dataset.from_generator(
+        return tensorflow.data.Dataset.from_generator(
             cls._generator,
-            output_types=tf.dtypes.int64,
+            output_types=tensorflow.dtypes.int64,
             output_shapes=((120, 120, 3),(1,)),
             args=(image_paths, y, augmentations, band_stats,)
         )
