@@ -130,6 +130,31 @@ gcloud compute instances create jupyter-tensorflow-notebook \
         --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME \
         --tags http-server
 
+# Model deployment
+```
+export FILEDIR=data_science/model_server
+export IMAGE_NAME=$BASE_IMAGE_NAME/model_server
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
+docker run -it --rm --env-file $FILEDIR/env.list -p 8889:8889 $IMAGE_NAME
+docker push $IMAGE_NAME
+
+gcloud compute instances create-with-container model-server \
+        --zone=us-west1-b \
+        --can-ip-forward \
+        --container-image=$IMAGE_NAME \
+        --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-1 \
+        --boot-disk-size=1GB \
+        --metadata enable-oslogin=TRUE \
+        --tags http-server
+
+## make request
+req = json.dumps({'image': arr.tolist()})
+requests.post(data=req)
+
+
+# Scratch
 # SSH to instance
 # password is
 export DISK_NAME=big-earth-data
