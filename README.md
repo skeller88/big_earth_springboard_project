@@ -150,8 +150,7 @@ gcloud compute instances create-with-container model-server \
         --tags http-server
 
 ## make request
-req = json.dumps({'image': arr.tolist()})
-requests.post(data=req)
+python data_science/model_server/make_test_request.py
 
 
 # Scratch

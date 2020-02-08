@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -14,9 +15,6 @@ stats = None
 
 
 def image_processor(img, stats):
-    if len(img) != 120 * 120 * 3:
-        print(f"Expected image shape of {120 * 120 * 3}, got {len(img)}")
-        return None
     img = np.array(img).reshape((120, 120, 3)).astype(np.uint16)
     normalized_img = (img - stats['mean'].values) / stats['std'].values
     return normalized_img
@@ -24,13 +22,14 @@ def image_processor(img, stats):
 
 @app.route("/classify", methods=["POST"])
 def classify():
-    data = flask.request.get_json()
+    data = json.loads(flask.request.get_json(force=True))
     global stats
     image = image_processor(data['image'], stats)
 
     global model
+    pred_probs = model.predict(np.array([image]))
     return flask.jsonify({
-        'is_cloud_probability': model.predict(image),
+        'is_cloud_probability': pred_probs.tolist()[0][0],
         'success': True
     })
 
@@ -49,6 +48,7 @@ if __name__ == "__main__":
     gcs_stats_blob = bucket.blob(os.environ.get("GCS_STATS_BLOB"))
     gcs_stats_blob.download_to_filename(tmp_stats_path)
     stats = pd.read_csv(tmp_stats_path)
+    stats = stats[stats['data'] == 'all']
 
     print('Loaded Keras model.')
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', port=8889)
