@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 
 import flask
@@ -22,15 +23,24 @@ def image_processor(img, stats):
 
 @app.route("/classify", methods=["POST"])
 def classify():
+    start = time.time()
     data = json.loads(flask.request.get_json(force=True))
     global stats
+
+    start_processing = time.time()
     image = image_processor(data['image'], stats)
+    processing_time = time.time() - start_processing
 
     global model
+    start_inference = time.time()
     pred_probs = model.predict(np.array([image]))
+    inference_time = time.time() - start_inference
     return flask.jsonify({
         'is_cloud_probability': pred_probs.tolist()[0][0],
-        'success': True
+        'success': True,
+        'processing_time': processing_time,
+        'inference_time': inference_time,
+        'request_time': time.time() - start
     })
 
 

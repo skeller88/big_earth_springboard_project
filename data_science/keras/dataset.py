@@ -3,7 +3,7 @@ import time
 import numpy as np
 import tensorflow
 
-def get_image_dataset(x, y, augmentations, band_stats, batch_size):
+def get_image_dataset(x, y, augmentations, image_processor, band_stats, batch_size):
     def image_path_and_label(image_paths, labels):
         for idx, image_path in enumerate(image_paths):
             # Have to return tensors
@@ -14,12 +14,16 @@ def get_image_dataset(x, y, augmentations, band_stats, batch_size):
 
     def image_loader(image_path, label):
         img = np.load(image_path.numpy())
-        normalized_img = (img - means) / stds
+
+        if image_processor is None:
+            processed_image = (img - means) / stds
+        else:
+            processed_image = image_processor(img)
 
         if augmentations is not None:
-            return augmentations(image=normalized_img)['image'], label
+            return augmentations(image=processed_image)['image'], label
         else:
-            return normalized_img, label
+            return processed_image, label
 
     def tf_image_loader(image_path, label):
         return tensorflow.py_function(func=image_loader,

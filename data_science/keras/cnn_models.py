@@ -66,7 +66,7 @@ def pretrained_model(base_model_class, input_shape, output_shape):
     Another useful discussion on both topics: https://www.kaggle.com/c/planet-understanding-the-amazon-from-space/discussion/36091#202629
     """
     # from https://www.kaggle.com/sashakorekov/end-to-end-resnet50-with-tta-lb-0-93#L321
-    base_model = base_model_class(include_top=False, input_shape=input_shape, pooling='avg', weights='imagenet')
+    base_model = base_model_class(include_top=False, input_shape=input_shape, pooling='max', weights='imagenet')
     for layer in base_model.layers:
         layer.trainable = False
 
@@ -75,6 +75,5 @@ def pretrained_model(base_model_class, input_shape, output_shape):
     x = Dropout(0.25)(x)
     output = Dense(output_shape, activation='sigmoid')(x)
     model = Model(inputs=base_model.inputs, outputs=output)
-    model.name = base_model.name
 
     return model
