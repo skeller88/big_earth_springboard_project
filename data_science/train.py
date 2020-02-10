@@ -1,15 +1,4 @@
-import datetime
-import json
-import os
-
-import sklearn
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
-from tensorflow.keras.losses import binary_crossentropy
-from tensorflow.keras.models import load_model
-
-from data_science.keras.dataset import get_image_dataset, get_predictions_for_dataset
 from data_science.keras.model_checkpoint_gcs import ModelCheckpointGCS
-from data_science.serialization_utils import numpy_to_json, sklearn_precision_recall_curve_to_dict
 
 
 def get_model_and_metadata_from_gcs(bucket, model_dir, model_file_ext, model_load_func, gcs_model_dir, experiment_name):
@@ -41,11 +30,30 @@ def get_model_and_metadata_from_gcs(bucket, model_dir, model_file_ext, model_loa
     return None, None
 
 
+# Overfit on all training data
+model = basic_cnn_model((120, 120, 3), n_classes)
+experiment_name = f"{project_name}_basic_cnn_2020_1_31_test"
+
+import datetime
+import json
+import os
+
+import sklearn
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.models import load_model
+
+from data_science.keras.dataset import get_image_dataset, get_predictions_for_dataset
+from data_science.keras.model_checkpoint_gcs import ModelCheckpointGCS
+from data_science.serialization_utils import numpy_to_json, sklearn_precision_recall_curve_to_dict
+from copy import copy
+
 def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_stats, image_augmentations,
                       image_processor, bucket, model_dir, gcs_model_dir, gcs_log_dir, should_upload_to_gcs,
                       experiment_name, start_model, should_train_from_scratch, optimizer, lr, batch_size=128,
                       n_epochs=100,
                       early_stopping_patience=6, metric_to_monitor='accuracy'):
+    # TODO - deserialize existing model metadata from json
     model, model_base_metadata = get_model_and_metadata_from_gcs(bucket, model_dir, "h5", load_model, gcs_model_dir,
                                                                  experiment_name)
 
@@ -64,7 +72,11 @@ def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_s
             'model': 'keras_cnn',
             'random_state': random_seed,
             # so that initial_epoch is 0
-            'epoch': -1
+            'epoch': -1,
+            'optimizer': optimizer.__name__,
+            'n_epochs': n_epochs,
+            'early_stopping_patience': early_stopping_patience,
+            'learning_rate': lr
         }
     else:
         print('Resuming training at epoch', int(model_base_metadata['epoch']) + 1)
@@ -110,57 +122,65 @@ def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_s
                                   shuffle=True, verbose=1)
 
     # load the best model
-    best_model, best_model_metadata = get_model_and_metadata_from_gcs(bucket, model_dir, "h5", load_model,
-                                                                      gcs_model_dir,
-                                                                      experiment_name)
+    if should_upload_to_gcs:
+        best_model, best_model_metadata = get_model_and_metadata_from_gcs(bucket, model_dir, "h5", load_model,
+                                                                          gcs_model_dir,
+                                                                          experiment_name)
+    else:
+        best_model = model
+        best_model_metadata = model_base_metadata
 
-    actual_y_train, pred_y_train, pred_y_train_probs = get_predictions_for_dataset(train_generator, best_model)
-
-    if valid_generator is not None:
-        actual_y_valid, pred_y_valid, pred_y_valid_probs = get_predictions_for_dataset(valid_generator, best_model)
+    y_actual_train, y_pred_train, y_pred_probs_train = get_predictions_for_dataset(train_generator, best_model)
+    train_loss = binary_crossentropy(y_actual_train, y_pred_probs_train).numpy().tolist()
 
     # add more stats
-    if should_upload_to_gcs:
-        train_loss = binary_crossentropy(actual_y_train, pred_y_train_probs)
+    best_model_metadata.update({
+        'history': history.history,
+        'accuracy_train': sklearn.metrics.accuracy_score(y_actual_train, y_pred_train),
+        'f1_score_train': sklearn.metrics.f1_score(y_actual_train, y_pred_train),
+        'train_loss': train_loss,
+        'loss': train_loss,
+        'y_actual_train': y_actual_train,
+        'y_pred_train': y_pred_train,
+        'y_pred_probs_train': y_pred_probs_train,
+    })
+
+    if valid_generator is not None:
+        y_actual_valid, y_pred_valid, y_pred_probs_valid = get_predictions_for_dataset(valid_generator, best_model)
+        valid_loss = binary_crossentropy(y_actual_valid, y_pred_probs_valid).numpy().tolist()
         best_model_metadata.update({
-            'history': history.history,
-            'accuracy_train': sklearn.metrics.accuracy_score(actual_y_train, pred_y_train),
-            'f1_score_train': sklearn.metrics.f1_score(actual_y_train, pred_y_train),
-            'train_loss': train_loss
+            'accuracy_valid': sklearn.metrics.accuracy_score(y_actual_valid, y_pred_valid),
+            'f1_score_valid': sklearn.metrics.f1_score(y_actual_valid, y_pred_valid),
+            'confusion_matrix': sklearn.metrics.confusion_matrix(y_actual_valid, y_pred_valid),
+            'precision_recall_curve': sklearn.metrics.precision_recall_curve(y_actual_valid, y_pred_valid),
+            'y_actual_valid': y_actual_valid,
+            'y_pred_valid': y_pred_valid,
+            'y_pred_probs_valid': y_pred_probs_valid,
+            'loss': valid_loss
         })
 
+    if should_upload_to_gcs:
+        serializable_metadata = copy(best_model_metadata)
+        json_serializable_history = {}
+        for k, v in history.history.items():
+            json_serializable_history[k] = list(map(float, v))
+        serializable_metadata['history'] = json_serializable_history
+
         if valid_generator is not None:
-            valid_loss = binary_crossentropy(actual_y_valid, pred_y_valid_probs)
-            best_model_metadata.update({
-                'accuracy_valid': sklearn.metrics.accuracy_score(actual_y_valid, pred_y_valid),
-                'f1_score_valid': sklearn.metrics.f1_score(actual_y_valid, pred_y_valid),
-                'confusion_matrix': numpy_to_json(sklearn.metrics.confusion_matrix(actual_y_valid, pred_y_valid)),
-                'precision_recall_curve': sklearn_precision_recall_curve_to_dict(
-                    sklearn.metrics.precision_recall_curve(actual_y_valid, pred_y_valid)),
-            })
+            serializable_metadata['confusion_matrix'] = numpy_to_json(serializable_metadata['confusion_matrix'])
+            serializable_metadata['precision_recall_curve'] = sklearn_precision_recall_curve_to_dict(
+                serializable_metadata['precision_recall_curve'])
+
+        datasets = ["train", "valid"] if valid_generator is not None else ["train"]
+        for dataset in datasets:
+            for variable in ["y_actual", "y_pred", "y_pred_probs"]:
+                serializable_metadata[f"{variable}_{dataset}"] = serializable_metadata[f"{variable}_{dataset}"].tolist()
 
         metadata_filepath = f"{model_and_metadata_filepath}_metadata.json"
         with open(metadata_filepath, 'w+') as json_file:
-            json.dump(best_model_metadata, json_file)
+            json.dump(serializable_metadata, json_file)
 
         blob = bucket.blob(f"{gcs_model_and_metadata_filepath}_metadata.json")
         blob.upload_from_filename(metadata_filepath)
 
-    if valid_generator is not None:
-        return {
-            'model': best_model,
-            'history': history.history,
-            'actual_y': actual_y_valid,
-            'pred_y': pred_y_valid,
-            'pred_y_probs': pred_y_valid_probs,
-            'loss': valid_loss
-        }
-    else:
-        return {
-            'model': best_model,
-            'history': history.history,
-            'actual_y': actual_y_train,
-            'pred_y': pred_y_train,
-            'pred_y_probs': pred_y_train_probs,
-            'loss': train_loss
-        }
+    return best_model_metadata

@@ -14,6 +14,9 @@ dependencies:
   - pip:
     - albumentations
     - google-cloud-storage
+    - hyperopt
+    - opencv-python
     - requests
     - rasterio
+    - seaborn
     - tensorflow-gpu==2.0.*
