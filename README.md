@@ -117,13 +117,13 @@ export IMAGE_PROJECT=deeplearning-platform-release
 export IMAGE_FAMILY=common-cu100
 gcloud compute instances create jupyter-tensorflow-notebook \
         --zone=us-west1-b \
-        --accelerator=count=1,type=nvidia-tesla-v100 \
+        --accelerator=count=2,type=nvidia-tesla-v100 \
         --can-ip-forward \
         --image-family=$IMAGE_FAMILY \
         --image-project=$IMAGE_PROJECT \
         --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
         --maintenance-policy=TERMINATE \
-        --machine-type=n1-standard-4 \
+        --machine-type=n1-standard-8 \
         --boot-disk-size=50GB \
         --metadata=enable-oslogin=TRUE,install-nvidia-driver=True \
         --metadata-from-file=startup-script=$FILEDIR/startup_script.sh \

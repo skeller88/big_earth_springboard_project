@@ -11,9 +11,9 @@ def join_histories(histories):
     return full_history
 
 
-def graph_model_history(history):
+def graph_model_history(history, title):
     f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    t = f.suptitle('Basic CNN Performance', fontsize=12)
+    t = f.suptitle(title, fontsize=12)
     f.subplots_adjust(top=0.85, wspace=0.3)
 
     max_epoch = len(history['val_loss']) + 1

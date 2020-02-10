@@ -1,4 +1,16 @@
+import datetime
+import json
+import os
+from copy import copy
+
+import sklearn
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.models import load_model
+
+from data_science.keras.dataset import get_image_dataset, get_predictions_for_dataset
 from data_science.keras.model_checkpoint_gcs import ModelCheckpointGCS
+from data_science.serialization_utils import numpy_to_json, sklearn_precision_recall_curve_to_dict
 
 
 def get_model_and_metadata_from_gcs(bucket, model_dir, model_file_ext, model_load_func, gcs_model_dir, experiment_name):
@@ -30,27 +42,9 @@ def get_model_and_metadata_from_gcs(bucket, model_dir, model_file_ext, model_loa
     return None, None
 
 
-# Overfit on all training data
-model = basic_cnn_model((120, 120, 3), n_classes)
-experiment_name = f"{project_name}_basic_cnn_2020_1_31_test"
-
-import datetime
-import json
-import os
-
-import sklearn
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
-from tensorflow.keras.losses import binary_crossentropy
-from tensorflow.keras.models import load_model
-
-from data_science.keras.dataset import get_image_dataset, get_predictions_for_dataset
-from data_science.keras.model_checkpoint_gcs import ModelCheckpointGCS
-from data_science.serialization_utils import numpy_to_json, sklearn_precision_recall_curve_to_dict
-from copy import copy
-
 def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_stats, image_augmentations,
                       image_processor, bucket, model_dir, gcs_model_dir, gcs_log_dir, should_upload_to_gcs,
-                      experiment_name, start_model, should_train_from_scratch, optimizer, lr, batch_size=128,
+                      experiment_name, model_name, start_model, should_train_from_scratch, optimizer, lr, batch_size=128,
                       n_epochs=100,
                       early_stopping_patience=6, metric_to_monitor='accuracy'):
     # TODO - deserialize existing model metadata from json
@@ -69,7 +63,7 @@ def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_s
             'data_prep': 'normalization_augmentation',
             'experiment_name': experiment_name,
             'experiment_start_time': now,
-            'model': 'keras_cnn',
+            'model': model_name,
             'random_state': random_seed,
             # so that initial_epoch is 0
             'epoch': -1,

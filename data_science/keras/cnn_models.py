@@ -1,7 +1,7 @@
 # Input data files are available in the "../input/" directory.
 # For example, running this (by clicking run or pressing Shift+Enter) will list the files in the input directory
 
-from tensorflow.keras.layers import BatchNormalization, Conv2D, Dense, Dropout, Flatten, Input, MaxPooling2D
+from tensorflow.keras.layers import BatchNormalization, Conv2D, Dense, Dropout, Flatten, GlobalAveragePooling2D, Input, MaxPooling2D
 from tensorflow.keras.models import Model
 
 
@@ -66,14 +66,15 @@ def pretrained_model(base_model_class, input_shape, output_shape):
     Another useful discussion on both topics: https://www.kaggle.com/c/planet-understanding-the-amazon-from-space/discussion/36091#202629
     """
     # from https://www.kaggle.com/sashakorekov/end-to-end-resnet50-with-tta-lb-0-93#L321
-    base_model = base_model_class(include_top=False, input_shape=input_shape, pooling='max', weights='imagenet')
+    base_model = base_model_class(include_top=False, input_shape=input_shape, weights='imagenet')
     for layer in base_model.layers:
         layer.trainable = False
 
-    x = base_model.output
-    x = Dense(2048, activation='relu')(x)
-    x = Dropout(0.25)(x)
-    output = Dense(output_shape, activation='sigmoid')(x)
+    base_output = base_model.output
+    gap = GlobalAveragePooling2D()(base_output)
+    dense = Dense(2048, activation='relu')(gap)
+    dropout = Dropout(0.25)(dense)
+    output = Dense(output_shape, activation='sigmoid')(dropout)
     model = Model(inputs=base_model.inputs, outputs=output)
 
     return model
