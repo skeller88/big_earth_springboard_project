@@ -49,4 +49,4 @@ def image_files_from_tif_to_augmented_png(num_workers, png_files_path, image_dir
         for image_prefix in image_prefixes:
             image_to_png(image_prefix)
 
-    parallelize_task(num_workers=num_workers, task=images_to_png, iterator=image_prefixes)
+    # parallelize_task(num_workers=num_workers, task=images_to_png, iterator=image_prefixes)
