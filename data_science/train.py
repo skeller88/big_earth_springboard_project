@@ -4,7 +4,7 @@ import os
 import time
 from copy import copy
 
-import sklearn
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, precision_recall_curve
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, TensorBoard
 from tensorflow.keras.losses import binary_crossentropy
 from tensorflow.keras.models import load_model
@@ -105,14 +105,14 @@ def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_s
     # add more stats
     best_model_metadata.update({
         'history': history.history,
-        'accuracy_train': sklearn.metrics.accuracy_score(y_actual_train, y_pred_train),
-        'f1_score_train': sklearn.metrics.f1_score(y_actual_train, y_pred_train),
+        'accuracy_train': accuracy_score(y_actual_train, y_pred_train),
+        'f1_score_train': f1_score(y_actual_train, y_pred_train),
         'train_loss': train_loss,
         'loss': train_loss,
         'y_actual_train': y_actual_train,
         'y_pred_train': y_pred_train,
         'y_pred_probs_train': y_pred_probs_train,
-        'epochs_trained': len(history.history),
+        'epochs_trained': len(history.history['loss']),
         'elapsed_train_time': time.time() - train_start_time
     })
 
@@ -120,10 +120,10 @@ def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_s
         y_actual_valid, y_pred_valid, y_pred_probs_valid = get_predictions_for_dataset(valid_generator, best_model)
         valid_loss = binary_crossentropy(y_actual_valid, y_pred_probs_valid).numpy().tolist()
         best_model_metadata.update({
-            'accuracy_valid': sklearn.metrics.accuracy_score(y_actual_valid, y_pred_valid),
-            'f1_score_valid': sklearn.metrics.f1_score(y_actual_valid, y_pred_valid),
-            'confusion_matrix': sklearn.metrics.confusion_matrix(y_actual_valid, y_pred_valid),
-            'precision_recall_curve': sklearn.metrics.precision_recall_curve(y_actual_valid, y_pred_valid),
+            'accuracy_valid': accuracy_score(y_actual_valid, y_pred_valid),
+            'f1_score_valid': f1_score(y_actual_valid, y_pred_valid),
+            'confusion_matrix': confusion_matrix(y_actual_valid, y_pred_valid),
+            'precision_recall_curve': precision_recall_curve(y_actual_valid, y_pred_valid),
             'y_actual_valid': y_actual_valid,
             'y_pred_valid': y_pred_valid,
             'y_pred_probs_valid': y_pred_probs_valid,

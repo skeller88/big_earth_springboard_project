@@ -1,51 +1,27 @@
 # Try hyperparameter optimization
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
-from hyperopt.pyll.base import scope
-import datetime
 import json
 import os
-from collections import defaultdict
-import gc
-from joblib import dump, load
 import random
 import time
-from typing import List, Tuple
 
+import numpy as np
+import pandas as pd
+import tensorflow as tf
 from albumentations import (
     Compose, Flip, Rotate
 )
-
-import cv2
-import dask
-import dask.array as da
-
 from google.cloud import storage
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
-
-import sklearn
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import SGDClassifier, LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support, precision_score, precision_recall_curve
-
-import tensorflow as tf
-from tensorflow.keras.applications import inception_v3, resnet_v2
+from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+from hyperopt.pyll.base import scope
 from tensorflow.keras.optimizers import Adam, RMSprop, SGD
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.metrics import Accuracy
 
 from data_engineering.dask_image_stats_collector import stats_for_numpy_images
-from data_science.graph_utils import graph_model_history
-from data_science.keras.model_checkpoint_gcs import ModelCheckpointGCS
-from data_science.keras.cnn_models import basic_cnn_model, basic_cnn_model_with_regularization, pretrained_model
-from data_science.serialization_utils import numpy_to_json, sklearn_precision_recall_curve_to_dict
-from data_science.sklearn_batch_generator import SklearnBatchGenerator
-from data_science.train import get_model_and_metadata_from_gcs, train_keras_model
+from data_science.keras.cnn_models import basic_cnn_model_with_regularization
+from data_science.train import train_keras_model
 
-root = '/home/jovyan/work'
+root = '/mnt/big-earth-data'
+print(os.listdir(root))
+
 random_seed = 0
 random.seed(random_seed)
 np.random.seed(random_seed)
@@ -56,22 +32,22 @@ gcs_client = storage.Client()
 bucket = gcs_client.bucket("big_earth")
 
 n_classes = 1
-n_epochs = 100
+n_epochs = 60
 batch_size = 128
-
-early_stopping_patience = 6
-use_small_dataset = False
-use_random_small_dataset = False
+early_stopping_patience = 20
 
 project_name = "cloud_and_shadow"
 model_dir = os.path.join(root, "model/models")
 log_dir = os.path.join(root, "model/logs")
+
+gcs_hyperparameter_opt_record_dir = "model/hyperparameter_opt_record"
+hyperparameter_opt_record_dir = os.path.join(root, gcs_hyperparameter_opt_record_dir)
 # blob prefix
 gcs_model_dir = "model/models"
 # tensorboard
 gcs_log_dir = "gs://big_earth/model/logs"
 
-for directory in [log_dir, model_dir]:
+for directory in [log_dir, model_dir, hyperparameter_opt_record_dir]:
     if not os.path.exists(directory):
         os.makedirs(directory, exist_ok=True)
 
@@ -146,32 +122,33 @@ print(y_train.shape, y_train[0].shape)
 
 augmentations_train = Compose([
     Flip(p=0.5),
-    Rotate(limit=(0, 360), p=0.5),
+    # Includes low, but excludes high
+    Rotate(limit=(1, 360), p=0.5),
 ])
 
 
 def optimize():
     def train_keras_with_hyperopt_params(params):
         model = basic_cnn_model_with_regularization((120, 120, 3), n_classes)
-        experiment_name = (f"{project_name}_basic_cnn_lr"
+        experiment_name = (f"{project_name}_cnn_bn_hopt_lr"
                            f"_{round(params['learning_rate'], 8)}_optimizer"
-                           f"_{params['optimizer'][0]}_2020_2_08")
+                           f"_{params['optimizer'][0]}_2020_2_13")
         print(experiment_name)
 
         result = train_keras_model(
-            random_seed=random_seed, x_train=x_train[:10], y_train=y_train[:10], x_valid=x_valid, y_valid=y_valid,
-            image_augmentations=augmentations_train, image_processor=None, band_stats=band_stats, bucket=bucket, model_dir=model_dir,
+            random_seed=random_seed, x_train=x_train, y_train=y_train, x_valid=x_valid, y_valid=y_valid,
+            image_augmentations=augmentations_train, image_processor=None, band_stats=band_stats, bucket=bucket,
+            model_dir=model_dir, model_name='keras_cnn_bn',
             gcs_model_dir=gcs_model_dir, gcs_log_dir=gcs_log_dir, experiment_name=experiment_name, start_model=model,
-            model_name='keras_cnn',
             should_train_from_scratch=True, optimizer=params['optimizer'][1], lr=params['learning_rate'],
-            should_upload_to_gcs=True, n_epochs=100, early_stopping_patience=params['early_stopping_patience'])
+            should_upload_to_gcs=True, n_epochs=n_epochs, batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience, should_return_serializable_metadata=True)
 
         result['status'] = STATUS_OK
         return result
 
     space = {
         'learning_rate': hp.loguniform('learning_rate', np.log(1e-5), np.log(1e-2)),
-        'early_stopping_patience': scope.int(hp.quniform('early_stopping_patience', 10, 30, 1)),
         'optimizer': hp.choice('optimizer', [
             ('Adam', Adam), ('SGD', SGD), ('RMSprop', RMSprop)])
     }
@@ -179,7 +156,48 @@ def optimize():
     best = fmin(fn=train_keras_with_hyperopt_params,
                 algo=tpe.suggest,
                 space=space,
-                max_evals=100,
+                max_evals=50,
                 trials=trials)
 
     return best, trials
+
+
+print('starting trials')
+best, trials = optimize()
+print('finished trials')
+
+space = {
+    'learning_rate': {
+        'start': np.log(1e-5),
+        'end': np.log(1e-2),
+        'distribution': 'hp.loguniform',
+
+    },
+    'optimizer': {
+        'values': ['Adam', 'SGD', 'RMSprop'],
+        'distribution': 'hp.choice',
+    },
+}
+
+serializable_trials = []
+for trial in trials.trials:
+    serializable_trials.append({
+        'trial_num': trial['tid'],
+        'trial_state': trial['state'],
+        'result': trial['result']
+    })
+
+hyperparameter_opt_record = {
+    'trials': serializable_trials,
+    'space': space
+}
+
+hyperparameter_opt_name = 'learning_rate_batch_size_optimizer_2020_2_13.json'
+hyperparameter_opt_record_filepath = os.path.join(hyperparameter_opt_record_dir, hyperparameter_opt_name)
+
+with open(hyperparameter_opt_record_filepath, 'w+') as json_file:
+    json.dump(hyperparameter_opt_record, json_file)
+
+print('uploading to', f"{gcs_hyperparameter_opt_record_dir}/{hyperparameter_opt_name}")
+blob = bucket.blob(f"{gcs_hyperparameter_opt_record_dir}/{hyperparameter_opt_name}")
+blob.upload_from_filename(hyperparameter_opt_record_filepath)

@@ -130,6 +130,33 @@ gcloud compute instances create jupyter-tensorflow-notebook \
         --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME \
         --tags http-server
 
+# Hyperparameter tuning
+```
+export DISK_NAME=big-earth-data
+export FILEDIR=data_science/hyperparameter_tuner
+export IMAGE_NAME=$BASE_IMAGE_NAME/hyperparameter_tuner
+docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
+docker run -it --rm -p 8889:8889 --volume ~:/mnt/big-earth-data $IMAGE_NAME
+docker push $IMAGE_NAME
+
+export IMAGE_PROJECT=deeplearning-platform-release
+export IMAGE_FAMILY=common-cu100
+gcloud compute instances create hyperparameter-tuner \
+        --zone=us-west1-b \
+        --accelerator=count=1,type=nvidia-tesla-v100 \
+        --can-ip-forward \
+        --image-family=$IMAGE_FAMILY \
+        --image-project=$IMAGE_PROJECT \
+        --scopes=cloud-platform,cloud-source-repos-ro,compute-rw,datastore,default,storage-rw \
+        --maintenance-policy=TERMINATE \
+        --machine-type=n1-standard-8 \
+        --boot-disk-size=50GB \
+        --metadata=enable-oslogin=TRUE,install-nvidia-driver=True \
+        --metadata-from-file=startup-script=$FILEDIR/startup_script.sh \
+        --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME \
+        --tags http-server
+```
+
 # Model deployment
 ```
 export FILEDIR=data_science/model_server
