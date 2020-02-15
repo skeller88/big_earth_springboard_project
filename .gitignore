@@ -5,6 +5,7 @@ splits/*
 .bash/env_secrets
 *.list
 *.gcs
+*.csv
 
 # Intellij
 atlassian-ide-plugin.xml

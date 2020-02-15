@@ -94,7 +94,6 @@ export IMAGE_NAME=$BASE_IMAGE_NAME/jupyter_tensorflow_notebook
 docker build -t $IMAGE_NAME --file $FILEDIR/Dockerfile  .
 docker run -it --rm -p 8888:8888 --volume ~:/home/jovyan/work $IMAGE_NAME
 docker push $IMAGE_NAME
-
 gcloud compute addresses create jupyter-tensorflow-notebook --region us-west1
 gcloud compute addresses list
 
@@ -111,13 +110,11 @@ export DISK_NAME=big-earth-data
 # Full names: --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/logging.admin,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/source.read_only \
 export DISK_NAME=big-earth-data
 export FILEDIR=data_science/jupyter_tensorflow_notebook
-#export IMAGE_PROJECT=ubuntu-os-cloud
-#export IMAGE_FAMILY=ubuntu-1804-lts
 export IMAGE_PROJECT=deeplearning-platform-release
 export IMAGE_FAMILY=common-cu100
 gcloud compute instances create jupyter-tensorflow-notebook \
         --zone=us-west1-b \
-        --accelerator=count=2,type=nvidia-tesla-v100 \
+        --accelerator=count=1,type=nvidia-tesla-v100 \
         --can-ip-forward \
         --image-family=$IMAGE_FAMILY \
         --image-project=$IMAGE_PROJECT \
@@ -129,6 +126,14 @@ gcloud compute instances create jupyter-tensorflow-notebook \
         --metadata-from-file=startup-script=$FILEDIR/startup_script.sh \
         --disk=name=$DISK_NAME,auto-delete=no,mode=rw,device-name=$DISK_NAME \
         --tags http-server
+
+# Upload notebook from local to instance
+gcloud compute scp ~/Documents/big_earth_springboard_project/data_science/model.ipynb jupyter-tensorflow-notebook:/mnt/disks/gce-containers-mounts/gce-persistent-disks/big-earth-data
+
+# Download notebook from instance to local
+gcloud compute scp jupyter-tensorflow-notebook:/mnt/disks/gce-containers-mounts/gce-persistent-disks/big-earth-data/model.ipynb ~/Documents/big_earth_springboard_project/data_science
+```
+
 
 # Hyperparameter tuning
 ```

@@ -17,7 +17,7 @@ from data_science.serialization_utils import numpy_to_json, sklearn_precision_re
 
 def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_stats, image_augmentations,
                       image_processor, bucket, model_dir, gcs_model_dir, gcs_log_dir, should_upload_to_gcs,
-                      experiment_name, model_name, start_model, should_train_from_scratch, optimizer, lr, batch_size=128,
+                      experiment_name, model_name, start_model, should_train_from_scratch, dataset_name, optimizer, lr, batch_size=128,
                       n_epochs=100,
                       early_stopping_patience=6, metric_to_monitor='accuracy', should_return_serializable_metadata=False):
     # TODO - deserialize existing model metadata from json
@@ -33,7 +33,8 @@ def train_keras_model(*, random_seed, x_train, y_train, x_valid, y_valid, band_s
         now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         model = start_model
         model_base_metadata = {
-            'data': 'train_valid_google_automl_cloud_and_shadow_dataset_small.csv',
+            # 'train_valid_google_automl_cloud_and_shadow_dataset_small.csv',
+            'data': dataset_name,
             'data_prep': 'normalization_augmentation',
             'experiment_name': experiment_name,
             'experiment_start_time': now,
